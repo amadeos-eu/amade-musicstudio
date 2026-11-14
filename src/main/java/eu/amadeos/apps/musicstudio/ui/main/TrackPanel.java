@@ -111,7 +111,7 @@ public final class TrackPanel extends JPanel {
             solo.addActionListener(e -> presenter.setSolo(part, solo.isSelected()));
             volume.setName("head." + part.id() + ".volume");
             volume.setToolTipText(msg.get("track.volume"));
-            volume.setPreferredSize(new Dimension(60, volume.getPreferredSize().height));
+            volume.setPreferredSize(new Dimension(90, volume.getPreferredSize().height));
             volume.addChangeListener(e -> {
                 if (!updating && !volume.getValueIsAdjusting()) presenter.setVolume(part, volume.getValue());
             });
@@ -125,10 +125,14 @@ public final class TrackPanel extends JPanel {
             controls.add(mute);
             controls.add(solo);
             controls.add(volume);
-            controls.add(keep);
+            // Keep stands beside the name: in the row of the controls it does not fit in every language.
+            JPanel nameRow = new JPanel(new BorderLayout(4, 0));
+            nameRow.setOpaque(false);
+            nameRow.add(name, BorderLayout.CENTER);
+            nameRow.add(keep, BorderLayout.EAST);
             JPanel top = new JPanel(new java.awt.GridLayout(0, 1, 0, 3));
             top.setOpaque(false);
-            top.add(name);
+            top.add(nameRow);
             top.add(soundRow);
             top.add(controls);
             add(top, BorderLayout.NORTH);

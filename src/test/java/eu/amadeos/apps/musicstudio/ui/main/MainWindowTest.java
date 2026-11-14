@@ -114,4 +114,44 @@ class MainWindowTest {
             }
         });
     }
+
+    /** In every language the controls of a lane head fit: none is cut off or wrapped out of sight. */
+    @Test
+    void laneHeadsShowAllTheirControls() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless(), "needs a display");
+        OnEdt.run(() -> {
+            for (eu.amadeos.commons.i18n.Language language : eu.amadeos.commons.i18n.Language.values()) {
+                eu.amadeos.commons.i18n.Messages msg = eu.amadeos.commons.i18n.Messages.load(
+                        eu.amadeos.apps.musicstudio.bootstrap.MusicStudioModule.class,
+                        eu.amadeos.apps.musicstudio.bootstrap.MusicStudioModule.MESSAGES, language.locale());
+                QueueExecutor executor = new QueueExecutor();
+                AudioRenderer renderer = new AudioRenderer();
+                MainWindow window = new MainWindow(msg, null);
+                MainPresenter presenter = new MainPresenter(window, msg, null,
+                        new MusicStudioPreferences(dir.resolve(language.code() + ".properties")),
+                        new MusicService(new Composer(), renderer, executor, Runnable::run, executor),
+                        new ExportService(new Composer(), renderer, Runnable::run, null), new MusicFiles(),
+                        new FakePlayer(), executor, executor, new AtomicLong(1)::getAndIncrement);
+                window.bind(presenter);
+                try {
+                    window.pack();
+                    for (Part part : Part.values()) {
+                        TrackPanel.Head head = window.tracks().head(part);
+                        for (javax.swing.JComponent c : new javax.swing.JComponent[]{head.sound, head.mute,
+                                head.solo, head.volume, head.keep}) {
+                            // A row that is too narrow wraps its last control below its own lower edge.
+                            java.awt.Rectangle r = c.getBounds();
+                            java.awt.Container row = c.getParent();
+                            String what = language.code() + " " + c.getName() + " " + r + " in " + row.getSize();
+                            assertTrue(r.x >= 0 && r.y >= 0 && r.x + r.width <= row.getWidth()
+                                    && r.y + r.height <= row.getHeight(), what);
+                            assertTrue(javax.swing.SwingUtilities.isDescendingFrom(c, head), what);
+                        }
+                    }
+                } finally {
+                    window.dispose();
+                }
+            }
+        });
+    }
 }
