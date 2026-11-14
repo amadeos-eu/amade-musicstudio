@@ -1,0 +1,24 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=amadeOS Music Studio
+Name[de]=amadeOS Musikstudio
+Name[fr]=amadeOS Studio de musique
+Name[es]=amadeOS Estudio de música
+Name[it]=amadeOS Studio musicale
+GenericName=Music Generator
+GenericName[de]=Musikgenerator
+GenericName[fr]=Générateur de musique
+GenericName[es]=Generador de música
+GenericName[it]=Generatore di musica
+Comment=Compose music from styles, sliders and chance, without internet
+Comment[de]=Musik aus Stilen, Reglern und Zufall komponieren, ohne Internet
+Comment[fr]=Composer de la musique à partir de styles, de curseurs et du hasard, sans internet
+Comment[es]=Componer música a partir de estilos, controles y azar, sin internet
+Comment[it]=Comporre musica da stili, cursori e caso, senza internet
+Icon=amade-musicstudio
+Exec=/usr/bin/amade-musicstudio %F
+Terminal=false
+Categories=AudioVideo;Audio;Music;
+Keywords=music;generator;compose;beat;lofi;chiptune;ambient;tracker;mod;midi;synthesizer;
+StartupNotify=true
