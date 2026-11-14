@@ -7,7 +7,8 @@ import java.util.Optional;
 
 /**
  * The instruments of the built-in synthesizer. Each is calculated, none is a recording, and each can play
- * every part. Never reorder: recipes store the id, MIDI export the General MIDI program.
+ * every part. Never reorder, new ones go at the end: recipes store the id, MIDI export the General MIDI
+ * program.
  */
 public enum Instrument {
     PIANO(Group.KEYS, false, 0),
@@ -25,11 +26,20 @@ public enum Instrument {
     CHIP_TRIANGLE(Group.CHIP, true, 38),
     ELECTRIC_BASS(Group.BASS, false, 33),
     SYNTH_BASS(Group.BASS, true, 38),
-    SUB_BASS(Group.BASS, true, 39);
+    SUB_BASS(Group.BASS, true, 39),
+    MALE_OOH(Group.VOICE, true, 53),
+    MALE_AAH(Group.VOICE, true, 52),
+    FEMALE_OOH(Group.VOICE, true, 53),
+    FEMALE_AAH(Group.VOICE, true, 52),
+    CHILD_OOH(Group.VOICE, true, 53),
+    CHILD_AAH(Group.VOICE, true, 52),
+    CHOIR_OOH(Group.VOICE, true, 53),
+    CHOIR_AAH(Group.VOICE, true, 52),
+    CHOIR_MMM(Group.VOICE, true, 53);
 
     /** The groups of the instrument chooser. */
     public enum Group {
-        KEYS, MALLETS, STRINGS, WIND, SYNTH, CHIP, BASS;
+        KEYS, MALLETS, STRINGS, WIND, SYNTH, CHIP, BASS, VOICE;
 
         public String key() {
             return "instrument.group." + name().toLowerCase(Locale.ROOT);

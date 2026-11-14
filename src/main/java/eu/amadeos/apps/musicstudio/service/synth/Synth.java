@@ -13,7 +13,7 @@ import java.util.Random;
  * The instruments and drums, calculated sample by sample: additive synthesis for the piano and the organ,
  * frequency modulation for electric piano, bells and marimba, filtered band-limited waves for pads, strings,
  * leads and basses, a plucked string (Karplus-Strong) for guitar, harp and electric bass, and noise, sweeps
- * and filters for the drums. Thread-safe; the noise of a note comes from the seed it is given.
+ * and filters for the drums; the sung voices are in {@link Vocal}. Thread-safe; the noise of a note comes from the seed it is given.
  */
 public final class Synth {
     /** The longest a decaying note rings, in seconds. */
@@ -30,6 +30,8 @@ public final class Synth {
             case ORGAN, CHIP_SQUARE, CHIP_TRIANGLE -> 0.05;
             case SYNTH_BASS, SUB_BASS -> 0.08;
             case ELECTRIC_BASS -> 0.15;
+            case MALE_OOH, MALE_AAH, FEMALE_OOH, FEMALE_AAH, CHILD_OOH, CHILD_AAH -> 0.3;
+            case CHOIR_OOH, CHOIR_AAH, CHOIR_MMM -> 0.7;
         };
     }
 
@@ -106,6 +108,8 @@ public final class Synth {
                 }
             }
             case GUITAR, HARP, ELECTRIC_BASS -> plucked(out, in, f, velocity, held, rel, sr, noise);
+            case MALE_OOH, MALE_AAH, FEMALE_OOH, FEMALE_AAH, CHILD_OOH, CHILD_AAH, CHOIR_OOH, CHOIR_AAH, CHOIR_MMM ->
+                    Vocal.note(out, in, pitch, velocity, held, rel, tone, sr, noise);
             case SUB_BASS -> {
                 for (int i = 0; i < n; i++) {
                     double t = i / sr;

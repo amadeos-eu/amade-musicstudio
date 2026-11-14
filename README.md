@@ -17,6 +17,7 @@
   - mute (M), solo (S) and volume
   - *Keep*: *New Piece* leaves this part as it is and only writes the others anew
 - **Sixteen synthesized instruments** in groups: piano, electric piano, organ, bells, marimba, strings, harp, plucked guitar, flute, warm pad, synth lead, two chip sounds and three basses. Five drum kits: none, soft, electronic, lo-fi and chip.
+- **Nine sung voices** without words, synthesized like the instruments: a man, a woman and a child singing *ooh* or *aah*, and a choir of six singing *ooh*, *aah* or humming. Every voice can sing every part.
 - **The instrument chooser** (the keyboard button of a lane) describes each instrument, shows its waveform and lets you try it on a two-octave keyboard, with the mouse or the computer keys A to L. Attack, release and octave can be set there too.
 - **The recipe** on the right:
   - seed (0 to 999 999 999), key (or the key the seed gives) and length (30 seconds to 5 minutes)
@@ -59,5 +60,4 @@ If `../amade-commons` is checked out next to this repository, Gradle builds agai
 
 ## Planned
 
-- Sung voices: a wordless choir (ooh, aah, mmm; male, female, children) as instruments
 - More styles and drum kits
