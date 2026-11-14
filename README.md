@@ -21,9 +21,10 @@
 - **The instrument chooser** (the keyboard button of a lane) describes each instrument, shows its waveform and lets you try it on a two-octave keyboard, with the mouse or the computer keys A to L. Attack, release and octave can be set there too.
 - **The recipe** on the right:
   - seed (0 to 999 999 999), key (or the key the seed gives) and length (30 seconds to 5 minutes)
-  - *Beat*: tempo, hardness (dull to hard), swing, energy (sparse to busy), fills
+  - *Beat*: tempo, hardness (dull to hard), swing, energy (sparse to busy), fills, variety (steady to changing)
   - *Sound*: brightness, reverb (dry to hall), vinyl crackle
   - Changing only the sound or a volume mixes the piece again without composing it anew, which is almost immediate.
+- **Parts that rest and come back**: with more *variety*, melody, bass and drums come in later and rest for some bars, while the chords carry on. The drums answer: a roll before they return, a last hit when they stop, a short fill and a crash when another part comes in.
 - **New Piece** (Ctrl+N, the die on the toolbar): new notes for all parts that are not kept; style, sliders and instruments stay. *Random Seed* (Ctrl+R) changes all parts.
 - **Variations** (Ctrl+G): eight relatives of the piece (other melody, chords, bass line or drums; faster, slower, harder, softer). Listen to each, then take one.
 - **History** of the last fifty pieces: *Back* and *Forward* (Alt+Left/Right, Ctrl+Z/Ctrl+Y).

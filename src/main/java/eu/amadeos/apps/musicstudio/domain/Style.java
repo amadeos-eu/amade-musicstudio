@@ -211,6 +211,18 @@ public enum Style {
         return brightness;
     }
 
+    /** How much the parts rest and come back, 0 to 100; see {@link Recipe#variety()}. */
+    public int defaultVariety() {
+        return switch (this) {
+            case PIANO, MEDITATION -> 30;
+            case AMBIENT -> 40;
+            case ACOUSTIC -> 45;
+            case ELECTRO -> 75;
+            case ADVENTURE -> 60;
+            default -> 50;
+        };
+    }
+
     public int defaultCrackle() {
         return crackle;
     }

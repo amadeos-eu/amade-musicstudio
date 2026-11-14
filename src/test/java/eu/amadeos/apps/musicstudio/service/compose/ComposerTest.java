@@ -54,7 +54,7 @@ class ComposerTest {
 
     @Test
     void anotherMelodySeedChangesOnlyTheMelody() {
-        Recipe r = Recipe.of(Style.LOFI, 4711);
+        Recipe r = Recipe.of(Style.LOFI, 4711).with(x -> x.variety = 0);
         Song a = composer.compose(r, false);
         Song b = composer.compose(r.withPartSeed(Part.MELODY, 99), false);
         assertEquals(notes(a, Part.DRUMS), notes(b, Part.DRUMS));
@@ -102,6 +102,153 @@ class ComposerTest {
     void noDrumsWithoutAKit() {
         Song song = composer.compose(Recipe.of(Style.LOFI, 1).with(b -> b.kit = Kit.NONE), false);
         assertTrue(notes(song, Part.DRUMS).isEmpty());
+    }
+
+    @Test
+    void withoutVarietyEveryPartPlaysThroughout() {
+        for (Style style : Style.values()) {
+            Song song = composer.compose(long_(style, 4711, 0), false);
+            for (Part p : Part.values()) {
+                if (p == Part.DRUMS) continue;
+                assertTrue(longestRest(song, p) <= 2, style + " " + p + " rests " + longestRest(song, p) + " bars");
+            }
+        }
+    }
+
+    @Test
+    void withVarietyPartsRestAndComeBack() {
+        int rests = 0;
+        for (Style style : Style.values()) {
+            Song steady = composer.compose(long_(style, 4711, 0), false);
+            Song changing = composer.compose(long_(style, 4711, 100), false);
+            assertEquals(notes(steady, Part.CHORDS), notes(changing, Part.CHORDS), "the chords hold the piece together");
+            for (Part p : List.of(Part.MELODY, Part.BASS)) {
+                List<String> all = notes(steady, p).stream().map(ComposerTest::where).toList();
+                List<Note> left = notes(changing, p);
+                assertTrue(left.size() < all.size(), style + " " + p);
+                for (Note n : left) assertTrue(all.contains(where(n)), "no new notes: " + n);
+                if (longestRest(changing, p) >= 4) rests++;
+            }
+            Section first = changing.sections().get(1);
+            Section last = changing.sections().get(changing.sections().size() - 2);
+            for (Part p : Part.values()) {
+                for (int bar = last.endBar() - 4; bar < last.endBar(); bar++) {
+                    assertEquals(inBar(steady, p, bar).size(), inBar(changing, p, bar).size(),
+                            style + ": the last four bars before the outro are whole, " + p + " bar " + bar);
+                }
+            }
+            assertEquals(Section.Kind.A, first.kind());
+        }
+        assertTrue(rests >= 12, "rests of four bars or more: " + rests);
+    }
+
+    @Test
+    void notesEndWhereTheirPartStartsToRest() {
+        for (Style style : Style.values()) {
+            Song song = composer.compose(long_(style, 4711, 100), false);
+            Arrangement plan = Arrangement.of(song.recipe(), song.sections(), song.bars(), false);
+            for (Note n : song.notes()) {
+                if (n.isDrum()) continue;
+                Part p = Song.part(n.channel());
+                int last = (int) Math.ceil((n.step() + n.length()) / Song.STEPS_PER_BAR) - 1;
+                for (int bar = (int) (n.step() / Song.STEPS_PER_BAR); bar <= last; bar++) {
+                    assertTrue(plan.plays(p, bar), style + ": sounds into a rest in bar " + bar + ": " + n);
+                }
+            }
+        }
+    }
+
+    @Test
+    void theDrumsRollBeforeTheyComeBackAndCrashWhenOthersComeIn() {
+        Song song = composer.compose(long_(Style.LOFI, 4711, 100), false);
+        Arrangement plan = Arrangement.of(song.recipe(), song.sections(), song.bars(), false);
+        int rolls = 0;
+        int crashes = 0;
+        int stops = 0;
+        for (int bar = 1; bar < song.bars(); bar++) {
+            int start = bar * Song.STEPS_PER_BAR;
+            List<Note> before = inBar(song, Part.DRUMS, bar - 1);
+            List<Note> here = inBar(song, Part.DRUMS, bar);
+            if (plan.enters(Part.DRUMS, bar)) {
+                rolls++;
+                assertTrue(before.size() >= 4, "a roll: " + before);
+                for (Note n : before) {
+                    assertEquals(Drum.SNARE, n.drum());
+                    assertTrue(n.step() >= start - 8, "in the second half of the bar");
+                }
+                assertTrue(before.getLast().velocity() > before.getFirst().velocity() + 0.2, "louder and louder");
+            } else if (plan.leaves(Part.DRUMS, bar)) {
+                stops++;
+                assertEquals(List.of(Drum.KICK, Drum.OPEN_HAT), here.stream().map(Note::drum).toList());
+                for (Note n : here) assertEquals(start, n.step());
+            } else if (!plan.plays(Part.DRUMS, bar)) {
+                assertTrue(here.isEmpty() || plan.enters(Part.DRUMS, bar + 1), "silent in bar " + bar);
+            }
+            if (plan.plays(Part.DRUMS, bar) && (plan.enters(Part.MELODY, bar) || plan.enters(Part.BASS, bar)
+                    || plan.enters(Part.DRUMS, bar))) {
+                crashes++;
+                assertTrue(here.stream().anyMatch(n -> n.drum() == Drum.OPEN_HAT && n.step() == start),
+                        "a crash in bar " + bar);
+            }
+        }
+        assertTrue(rolls >= 2, "rolls: " + rolls);
+        assertTrue(stops >= 2, "stops: " + stops);
+        assertTrue(crashes > rolls, "crashes: " + crashes);
+        List<String> hits = song.notes().stream().filter(Note::isDrum).map(n -> n.drum() + "@" + n.step()).toList();
+        assertEquals(hits.size(), hits.stream().distinct().count(), "no drum is hit twice at once");
+    }
+
+    @Test
+    void theDrumsDoNotAnswerWithoutAKit() {
+        Song song = composer.compose(long_(Style.LOFI, 4711, 100).with(b -> b.kit = Kit.NONE), false);
+        assertTrue(notes(song, Part.DRUMS).isEmpty());
+    }
+
+    @Test
+    void aKeptPartRestsInTheSameBars() {
+        Recipe r = long_(Style.ELECTRO, 4711, 100);
+        Song a = composer.compose(r, false);
+        Song b = composer.compose(r.withPartSeed(Part.MELODY, 99).withPartSeed(Part.DRUMS, 98), false);
+        assertEquals(notes(a, Part.BASS), notes(b, Part.BASS));
+        assertEquals(notes(a, Part.CHORDS), notes(b, Part.CHORDS));
+        assertNotEquals(notes(a, Part.MELODY), notes(b, Part.MELODY));
+    }
+
+    @Test
+    void aLoopStartsWithAllParts() {
+        for (long seed = 1; seed <= 20; seed++) {
+            Song loop = composer.compose(long_(Style.ELECTRO, seed, 100), true);
+            for (Part p : Part.values()) {
+                for (int bar = 0; bar < 4; bar++) assertFalse(inBar(loop, p, bar).isEmpty(), p + " in bar " + bar);
+            }
+        }
+    }
+
+    private static Recipe long_(Style style, long seed, int variety) {
+        return Recipe.of(style, seed).with(b -> {
+            b.lengthSeconds = 180;
+            b.variety = variety;
+        });
+    }
+
+    private static String where(Note n) {
+        return n.step() + "/" + n.channel() + "/" + n.pitch();
+    }
+
+    private static List<Note> inBar(Song song, Part part, int bar) {
+        return song.notes().stream().filter(n -> Song.part(n.channel()) == part
+                && (int) (n.step() / Song.STEPS_PER_BAR) == bar).toList();
+    }
+
+    /** The most bars in a row between intro and outro in which no note of the part starts. */
+    private static int longestRest(Song song, Part part) {
+        int longest = 0;
+        int run = 0;
+        for (int bar = song.sections().get(1).startBar(); bar < song.sections().getLast().startBar(); bar++) {
+            run = inBar(song, part, bar).isEmpty() ? run + 1 : 0;
+            longest = Math.max(longest, run);
+        }
+        return longest;
     }
 
     private static List<Note> notes(Song song, Part part) {

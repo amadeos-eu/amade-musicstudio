@@ -272,7 +272,7 @@ public final class MainPresenter {
 
     /** The sliders of the settings. */
     public enum Slider {
-        TEMPO, HARDNESS, SWING, ENERGY, FILLS, BRIGHTNESS, REVERB, CRACKLE;
+        TEMPO, HARDNESS, SWING, ENERGY, FILLS, BRIGHTNESS, REVERB, CRACKLE, VARIETY;
 
         public String key() {
             return "slider." + name().toLowerCase(java.util.Locale.ROOT);
@@ -288,6 +288,7 @@ public final class MainPresenter {
                 case BRIGHTNESS -> r.brightness();
                 case REVERB -> r.reverb();
                 case CRACKLE -> r.crackle();
+                case VARIETY -> r.variety();
             };
         }
 
@@ -312,6 +313,7 @@ public final class MainPresenter {
                 case BRIGHTNESS -> b.brightness = value;
                 case REVERB -> b.reverb = value;
                 case CRACKLE -> b.crackle = value;
+                case VARIETY -> b.variety = value;
             }
         }));
     }

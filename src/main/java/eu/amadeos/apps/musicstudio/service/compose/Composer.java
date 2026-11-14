@@ -21,6 +21,7 @@ import java.util.Random;
  * Writes the notes of a piece by rules. The form is intro, A, B, A, ... and outro. The chords follow a
  * chain of likely steps in the key; the melody is a motif of one bar, varied, repeated and closed on the key
  * note, with chord notes on the strong beats; accompaniment, bass and drums follow the patterns of the style.
+ * Melody, bass and drums may rest for some bars ({@link Arrangement}), and the drums answer to that.
  *
  * <p>Every part draws its random numbers from its own seed, so a part stays the same when another part gets
  * a new seed. The random numbers come from {@link Random}, whose sequence Java fixes for every version.
@@ -71,6 +72,7 @@ public final class Composer {
             bass();
             if (r.kit() != Kit.NONE) drums();
             melody();
+            arrange();
             List<Note> shifted = new ArrayList<>(notes.size());
             for (Note n : notes) {
                 Part p = Song.part(n.channel());
@@ -78,6 +80,89 @@ public final class Composer {
             }
             shifted.sort(Comparator.comparingDouble(Note::step).thenComparingInt(Note::channel));
             return new Song(r, loop, shifted, sections, bars, keyNote, minor, chordsPerBar);
+        }
+
+        // ---------------------------------------------------------------- who plays when
+
+        /**
+         * Takes the notes out of the bars in which their part rests. The notes are written first and taken out
+         * afterwards, so that a part plays the same notes whether or not it rested before.
+         */
+        void arrange() {
+            Arrangement plan = Arrangement.of(r, sections, bars, loop);
+            List<Note> played = new ArrayList<>(notes.size());
+            for (Note n : notes) {
+                Part part = Song.part(n.channel());
+                int bar = (int) (n.step() / Song.STEPS_PER_BAR);
+                if (!plan.plays(part, bar)) continue;
+                int rest = bar + 1;
+                while (rest < bars && plan.plays(part, rest)) rest++;
+                double room = rest * Song.STEPS_PER_BAR - n.step();
+                played.add(rest < bars && n.length() > room ? n.withLength(room) : n);
+            }
+            notes.clear();
+            notes.addAll(played);
+            if (r.kit() != Kit.NONE) reactions(plan);
+        }
+
+        /**
+         * What the drums play because of the others: a roll before they come back, a last hit when they stop,
+         * a short fill and a crash when melody or bass come in, two quiet hits before one of them rests.
+         */
+        void reactions(Arrangement plan) {
+            Random random = random(Part.DRUMS, "reactions");
+            boolean soft = st.groove() == Style.Groove.HALFTIME;
+            Drum fillDrum = st.groove() == Style.Groove.EPIC ? Drum.TOM : Drum.SNARE;
+            for (int bar = 1; bar < bars; bar++) {
+                int base = bar * Song.STEPS_PER_BAR;
+                int before = base - Song.STEPS_PER_BAR;
+                if (plan.enters(Part.DRUMS, bar)) {
+                    int[] roll = soft ? new int[]{8, 10, 12, 14} : energy > 0.5 ? new int[]{8, 10, 12, 13, 14, 15}
+                            : new int[]{10, 12, 14, 15};
+                    for (int i = 0; i < roll.length; i++) {
+                        double rise = i / (double) (roll.length - 1);
+                        react(before + roll[i], soft ? Drum.SHAKER : fillDrum, soft ? 0.3 + 0.25 * rise : 0.4 + 0.5 * rise,
+                                random);
+                    }
+                    if (!soft) react(base, Drum.OPEN_HAT, 0.8, random);
+                } else if (plan.leaves(Part.DRUMS, bar)) {
+                    if (!drumsIn(before, 0, Song.STEPS_PER_BAR)) continue;
+                    react(base, Drum.KICK, soft ? 0.7 : 0.9, random);
+                    if (!soft) react(base, Drum.OPEN_HAT, 0.6, random);
+                } else if (plan.plays(Part.DRUMS, bar) && !soft) {
+                    boolean enters = plan.enters(Part.MELODY, bar) || plan.enters(Part.BASS, bar);
+                    boolean leaves = plan.leaves(Part.MELODY, bar) || plan.leaves(Part.BASS, bar);
+                    if (!enters && !leaves || !drumsIn(before, 0, Song.STEPS_PER_BAR)) continue;
+                    boolean filled = drumsIn(before, 13, Song.STEPS_PER_BAR - 13, Song.SNARE);
+                    if (enters) {
+                        if (!filled) {
+                            react(before + 14, fillDrum, 0.5, random);
+                            react(before + 15, fillDrum, 0.7, random);
+                        }
+                        react(base, Drum.OPEN_HAT, 0.8, random);
+                    } else if (!filled) {
+                        react(before + 13, fillDrum, 0.35, random);
+                        react(before + 15, fillDrum, 0.5, random);
+                    }
+                }
+            }
+        }
+
+        /** A drum hit, unless the same drum is already hit there. */
+        void react(double step, Drum d, double velocity, Random random) {
+            for (Note n : notes) {
+                if (n.drum() == d && Math.abs(n.step() - step) < 0.01) return;
+            }
+            drum(step, d, velocity, random);
+        }
+
+        boolean drumsIn(int from, int offset, int steps, int... channels) {
+            for (Note n : notes) {
+                if (!n.isDrum() || n.step() < from + offset || n.step() >= from + offset + steps) continue;
+                if (channels.length == 0) return true;
+                for (int c : channels) if (n.channel() == c) return true;
+            }
+            return false;
         }
 
         // ---------------------------------------------------------------- form and chords

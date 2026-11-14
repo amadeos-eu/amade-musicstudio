@@ -32,12 +32,14 @@ class RecipeTest {
                     b.key = 9;
                     b.bpm = 150;
                     b.crackle = 33;
+                    b.variety = 77;
                     b.kit = Kit.ELECTRONIC;
                     b.drumVolume = 90;
                 });
         assertEquals(r, Recipe.parse(r.toText()));
         assertEquals(r, Recipe.parse(r.toLine()));
         assertTrue(r.toLine().contains("seed.drums=1234"), r.toLine());
+        assertTrue(r.toLine().contains("variety=77"), r.toLine());
         assertFalse(r.toLine().contains("seed.melody"), "only seeds that differ are written");
         assertTrue(r.toText().startsWith(Recipe.HEADER));
     }
