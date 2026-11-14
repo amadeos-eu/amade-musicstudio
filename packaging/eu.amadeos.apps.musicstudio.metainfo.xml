@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata of amade-musicstudio, installed as /usr/share/metainfo/eu.amadeos.apps.musicstudio.metainfo.xml.
+     amadeOS Software shows it for the installed package; a repository's appstream-generator reads it too. -->
+<component type="desktop-application">
+  <id>eu.amadeos.apps.musicstudio</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>EUPL-1.2</project_license>
+
+  <name>amadeOS Music Studio</name>
+  <name xml:lang="de">amadeOS Musikstudio</name>
+  <name xml:lang="fr">amadeOS Studio de musique</name>
+  <name xml:lang="es">amadeOS Estudio de música</name>
+  <name xml:lang="it">amadeOS Studio musicale</name>
+
+  <summary>Compose music from styles, sliders and chance, without internet</summary>
+  <summary xml:lang="de">Musik aus Stilen, Reglern und Zufall komponieren, ohne Internet</summary>
+  <summary xml:lang="fr">Composer de la musique à partir de styles, de curseurs et du hasard, sans internet</summary>
+  <summary xml:lang="es">Componer música a partir de estilos, controles y azar, sin internet</summary>
+  <summary xml:lang="it">Comporre musica da stili, cursori e caso, senza internet</summary>
+
+  <description>
+    <p>amade-musicstudio is the music studio of the amadeOS desktop. Pick a style, move a few sliders and let chance compose the rest. Every piece is composed by rules and played by a built-in synthesizer on this computer: the same recipe always gives the same music.</p>
+    <p xml:lang="de">amade-musicstudio ist das Musikstudio des amadeOS-Desktops. Einen Stil wählen, ein paar Regler schieben und den Rest vom Zufall komponieren lassen. Jedes Stück wird nach Regeln komponiert und von einem eingebauten Synthesizer auf diesem Rechner gespielt: dasselbe Rezept ergibt immer dieselbe Musik.</p>
+    <p xml:lang="fr">amade-musicstudio est le studio de musique du bureau amadeOS. Choisir un style, déplacer quelques curseurs et laisser le hasard composer le reste. Chaque morceau est composé selon des règles et joué par un synthétiseur intégré sur cet ordinateur : la même recette donne toujours la même musique.</p>
+    <p xml:lang="es">amade-musicstudio es el estudio de música del escritorio amadeOS. Elegir un estilo, mover algunos controles y dejar que el azar componga el resto. Cada pieza se compone con reglas y la toca un sintetizador integrado en este ordenador: la misma receta da siempre la misma música.</p>
+    <p xml:lang="it">amade-musicstudio è lo studio musicale del desktop amadeOS. Scegliere uno stile, spostare qualche cursore e lasciare che il caso componga il resto. Ogni brano viene composto con delle regole e suonato da un sintetizzatore integrato su questo computer: la stessa ricetta dà sempre la stessa musica.</p>
+    <ul>
+      <li>Eight styles: ambient, lo-fi, chiptune, piano, electro, meditation, acoustic and adventure</li>
+      <li xml:lang="de">Acht Stile: Ambient, Lo-Fi, Chiptune, Klavier, Electro, Meditation, Akustik und Abenteuer</li>
+      <li xml:lang="fr">Huit styles : ambient, lo-fi, chiptune, piano, électro, méditation, acoustique et aventure</li>
+      <li xml:lang="es">Ocho estilos: ambient, lo-fi, chiptune, piano, electro, meditación, acústico y aventura</li>
+      <li xml:lang="it">Otto stili: ambient, lo-fi, chiptune, pianoforte, electro, meditazione, acustico e avventura</li>
+      <li>Sliders for tempo, hardness, swing, energy, fills, brightness, reverb and vinyl crackle</li>
+      <li xml:lang="de">Regler für Tempo, Härte, Swing, Energie, Fills, Helligkeit, Hall und Vinylknistern</li>
+      <li xml:lang="fr">Curseurs pour le tempo, la dureté, le swing, l'énergie, les breaks, la clarté, la réverbération et les craquements du vinyle</li>
+      <li xml:lang="es">Controles de tempo, dureza, swing, energía, redobles, brillo, reverberación y crujido de vinilo</li>
+      <li xml:lang="it">Cursori per tempo, durezza, swing, energia, fill, luminosità, riverbero e fruscio del vinile</li>
+      <li>Sixteen synthesized instruments and four drum kits; mute, solo and keep per part</li>
+      <li xml:lang="de">Sechzehn synthetische Instrumente und vier Schlagzeug-Sets; Stumm, Solo und Behalten je Spur</li>
+      <li xml:lang="fr">Seize instruments synthétisés et quatre kits de batterie ; muet, solo et garder par piste</li>
+      <li xml:lang="es">Dieciséis instrumentos sintetizados y cuatro kits de batería; silencio, solo y mantener por pista</li>
+      <li xml:lang="it">Sedici strumenti sintetizzati e quattro kit di batteria; muto, solo e tieni per traccia</li>
+      <li>Export as WAV, FLAC, OGG, MOD tracker module or MIDI, with the recipe inside</li>
+      <li xml:lang="de">Export als WAV, FLAC, OGG, MOD-Trackermodul oder MIDI, mit dem Rezept darin</li>
+      <li xml:lang="fr">Export en WAV, FLAC, OGG, module tracker MOD ou MIDI, avec la recette à l'intérieur</li>
+      <li xml:lang="es">Exportación como WAV, FLAC, OGG, módulo tracker MOD o MIDI, con la receta dentro</li>
+      <li xml:lang="it">Esportazione come WAV, FLAC, OGG, modulo tracker MOD o MIDI, con la ricetta dentro</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">amade-musicstudio.desktop</launchable>
+  <icon type="stock">amade-musicstudio</icon>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+  </categories>
+
+  <url type="homepage">https://github.com/amadeos-eu/amade-musicstudio</url>
+  <url type="bugtracker">https://github.com/amadeos-eu/amade-musicstudio/issues</url>
+  <developer id="eu.amadeos">
+    <name>amadeOS Project</name>
+  </developer>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>A Lo-Fi piece with its four parts and its recipe</caption>
+      <caption xml:lang="de">Ein Lo-Fi-Stück mit seinen vier Spuren und seinem Rezept</caption>
+      <caption xml:lang="fr">Un morceau Lo-Fi avec ses quatre pistes et sa recette</caption>
+      <caption xml:lang="es">Una pieza Lo-Fi con sus cuatro pistas y su receta</caption>
+      <caption xml:lang="it">Un brano Lo-Fi con le sue quattro tracce e la sua ricetta</caption>
+      <image>https://raw.githubusercontent.com/amadeos-eu/amade-musicstudio/main/docs/screenshots/amade-musicstudio.png</image>
+    </screenshot>
+  </screenshots>
+
+  <provides>
+    <binary>amade-musicstudio</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+</component>
