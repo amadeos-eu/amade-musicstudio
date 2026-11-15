@@ -153,8 +153,16 @@ class RecipeTest {
         assertEquals(0, v.tremolo());
         assertEquals(0, v.tremoloRate());
         assertEquals(128, v.tremoloSteps());
-        assertEquals(2, v.sweepSteps());
+        assertTrue(Voice.wholePiece(v.sweepRate()));
+        assertFalse(Voice.wholePiece(v.tremoloRate()));
+        assertEquals(2, v.withSweep(100, Voice.RISING - 1).sweepSteps());
         assertEquals("movement.rate.16", Voice.rateKey(3));
+        assertEquals("movement.rate.rising", Voice.rateKey(Voice.RISING));
+        assertEquals("movement.rate.falling", Voice.rateKey(Voice.FALLING));
+        Recipe r = Recipe.of(Style.ELECTRO, 7);
+        Recipe whole = r.withVoice(Part.PAD, r.pad().withSweep(80, Voice.RISING).withTremolo(40, Voice.FALLING));
+        assertEquals(whole, Recipe.parse(whole.toText()));
+        assertEquals(whole, Recipe.parse(whole.toLine()));
     }
 
     @Test

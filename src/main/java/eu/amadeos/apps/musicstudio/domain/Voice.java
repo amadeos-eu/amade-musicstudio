@@ -6,7 +6,8 @@ import java.util.Objects;
 /**
  * How one tonal part sounds: the instrument, an octave up or down, a softer or harder attack, a shorter or
  * longer release, the volume in the mix, and two slow movements in time with the piece: a filter that closes
- * and opens again (sweep) and a volume that sinks and rises again (tremolo).
+ * and opens again (sweep) and a volume that sinks and rises again (tremolo). Either can also take one course
+ * over the whole piece instead of coming back in waves.
  *
  * @param octave      -2 to 2
  * @param attack      0 (hard) to 100 (soft); 50 is the instrument as it is
@@ -22,8 +23,17 @@ public record Voice(Instrument instrument, int octave, int attack, int release, 
     public static final int MIN_OCTAVE = -2;
     public static final int MAX_OCTAVE = 2;
     public static final int DEFAULT_VOLUME = 75;
-    /** The lengths a movement can have, in sixteenths: eight, four and two bars, one bar, a half, a quarter, an eighth. */
-    public static final List<Integer> RATES = List.of(128, 64, 32, 16, 8, 4, 2);
+    /**
+     * The lengths a movement can have, in sixteenths: eight, four and two bars, one bar, a half, a quarter, an
+     * eighth. The last two are no waves but one slow course over the whole piece: {@link #RISING} (the filter
+     * opens, the volume grows) and {@link #FALLING} (the filter closes, the volume sinks). New ones go at the
+     * end: recipes store the index.
+     */
+    public static final List<Integer> RATES = List.of(128, 64, 32, 16, 8, 4, 2, 0, -1);
+    /** The index in {@link #RATES} of the course that rises over the whole piece. */
+    public static final int RISING = 7;
+    /** The index in {@link #RATES} of the course that falls over the whole piece. */
+    public static final int FALLING = 8;
     public static final int DEFAULT_SWEEP_RATE = 1;
     public static final int DEFAULT_TREMOLO_RATE = 5;
 
@@ -43,17 +53,23 @@ public record Voice(Instrument instrument, int octave, int attack, int release, 
         return new Voice(instrument, 0, 50, 50, DEFAULT_VOLUME, 0, DEFAULT_SWEEP_RATE, 0, DEFAULT_TREMOLO_RATE);
     }
 
-    /** The message key of a length in {@link #RATES}. */
+    /** The message key of a length in {@link #RATES}; the courses over the whole piece are named by their direction. */
     public static String rateKey(int rate) {
-        return "movement.rate." + RATES.get(rate);
+        return rate == RISING ? "movement.rate.rising" : rate == FALLING ? "movement.rate.falling"
+                : "movement.rate." + RATES.get(rate);
     }
 
-    /** One sweep in sixteenths. */
+    /** Whether a length in {@link #RATES} is one course over the whole piece. */
+    public static boolean wholePiece(int rate) {
+        return rate == RISING || rate == FALLING;
+    }
+
+    /** One sweep in sixteenths; not for the courses over the whole piece. */
     public int sweepSteps() {
         return RATES.get(sweepRate);
     }
 
-    /** One wave of the tremolo in sixteenths. */
+    /** One wave of the tremolo in sixteenths; not for the courses over the whole piece. */
     public int tremoloSteps() {
         return RATES.get(tremoloRate);
     }

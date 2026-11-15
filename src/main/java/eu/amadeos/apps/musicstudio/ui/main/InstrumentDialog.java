@@ -176,8 +176,10 @@ final class InstrumentDialog extends JDialog {
         sweepRate.setName("instrument.sweep.rate");
         tremoloRate.setName("instrument.tremolo.rate");
         for (int rate = 0; rate < Voice.RATES.size(); rate++) {
-            sweepRate.addItem(msg.get(Voice.rateKey(rate)));
-            tremoloRate.addItem(msg.get(Voice.rateKey(rate)));
+            // A course over the whole piece is named by what it does to the filter or the volume.
+            boolean whole = Voice.wholePiece(rate);
+            sweepRate.addItem(msg.get(whole ? Voice.rateKey(rate) + ".sweep" : Voice.rateKey(rate)));
+            tremoloRate.addItem(msg.get(whole ? Voice.rateKey(rate) + ".tremolo" : Voice.rateKey(rate)));
         }
         sliderRow(right, "dialog.instrument.sweep", sweep, "dialog.instrument.sweep.low", "dialog.instrument.sweep.high");
         fieldRow(right, "dialog.instrument.sweep.rate", sweepRate);
