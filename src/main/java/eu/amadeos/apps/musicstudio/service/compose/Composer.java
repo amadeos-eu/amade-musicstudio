@@ -441,7 +441,7 @@ public final class Composer {
             };
             int[] stabLength = {5, 3, 5};
             // The riff of the muted guitar: a gallop, straight eighths, or a broken figure.
-            int[] riff = switch (random.nextInt(3)) {
+            int[] riff = switch (random(Part.CHORDS, "riff").nextInt(3)) {
                 case 0 -> new int[]{0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 15};
                 case 1 -> new int[]{0, 2, 4, 6, 8, 10, 12, 14};
                 default -> new int[]{0, 2, 3, 6, 8, 10, 11, 14};
