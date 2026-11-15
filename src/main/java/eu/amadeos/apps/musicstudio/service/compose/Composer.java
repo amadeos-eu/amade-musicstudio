@@ -440,6 +440,13 @@ public final class Composer {
                 default -> new int[]{0, 3, 10};
             };
             int[] stabLength = {5, 3, 5};
+            // The riff of the muted guitar: a gallop, straight eighths, or a broken figure.
+            int[] riff = switch (random(Part.CHORDS, "riff").nextInt(3)) {
+                case 0 -> new int[]{0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 15};
+                case 1 -> new int[]{0, 2, 4, 6, 8, 10, 12, 14};
+                default -> new int[]{0, 2, 3, 6, 8, 10, 11, 14};
+            };
+            int[][] comps = {{0, 6}, {6, 14}, {0, 10}, {4, 6, 14}, {2, 10}};
             for (int bar = 0; bar < bars; bar++) {
                 int[] pcs = chordsPerBar[bar];
                 boolean chordStarts = bar == 0 || st.barsPerChord() == 1 || bar % 2 == 0
@@ -476,6 +483,68 @@ public final class Composer {
                             double accent = t % 4 == 0 ? 1.0 : 0.82;
                             add(base + t, stepLength * 2, Song.CHORD + (roundRobin++ % 3), seq[i % seq.length],
                                     vel * accent, in);
+                        }
+                    }
+                    case POWER -> {
+                        // Root, fifth and octave, low on the neck; the third is left to the melody.
+                        int low = 40 + Math.floorMod(pcs[0] - 4, 12);
+                        int[] power = {low, low + 7, low + 12};
+                        boolean heavy = st.groove() == Style.Groove.DOUBLE_BASS;
+                        if (edge(sec) || sec.kind() == Kind.B && !heavy) {
+                            // Open chords that ring.
+                            int[] hits = edge(sec) ? new int[]{0} : new int[]{0, 6, 10};
+                            for (int k = 0; k < hits.length; k++) {
+                                int len = (k + 1 < hits.length ? hits[k + 1] : 16) - hits[k];
+                                for (int i = 0; i < 3; i++) add(base + hits[k], len, Song.CHORD + i, power[i], vel, in);
+                            }
+                        } else if (heavy) {
+                            int[] hits = sec.kind() == Kind.B && energy > 0.75
+                                    ? new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15} : riff;
+                            for (int k = 0; k < hits.length; k++) {
+                                int t = hits[k];
+                                boolean accent = t == 0 || t == 8 && energy > 0.5;
+                                if (accent) {
+                                    int len = (k + 1 < hits.length ? hits[k + 1] : 16) - t;
+                                    for (int i = 0; i < 3; i++) add(base + t, len, Song.CHORD + i, power[i], vel, in);
+                                } else {
+                                    add(base + t, 0.7, Song.CHORD, power[0], vel * 0.8, in);
+                                    add(base + t, 0.7, Song.CHORD + 1, power[1], vel * 0.7, in);
+                                }
+                            }
+                        } else {
+                            int step = energy < 0.4 ? 4 : 2;
+                            for (int t = 0; t < 16; t += step) {
+                                boolean accent = t % 8 == 0;
+                                for (int i = 0; i < (accent ? 3 : 2); i++) {
+                                    add(base + t, step * 0.9, Song.CHORD + i, power[i], vel * (accent ? 1 : 0.8), in);
+                                }
+                            }
+                        }
+                    }
+                    case BOSSA -> {
+                        int[] hits = {0, 3, 6, 10, 13};
+                        for (int k = 0; k < hits.length; k++) {
+                            if (k > 0 && random.nextDouble() > 0.55 + 0.45 * energy) continue;
+                            for (int i = 0; i < 3; i++) {
+                                add(base + hits[k], k == 2 ? 3.5 : 2.5, Song.CHORD + i, v[i], vel * (k == 0 ? 0.9 : 0.75), in);
+                            }
+                        }
+                    }
+                    case COMP -> {
+                        // The pianist answers the soloist with a few short chords, in other places every bar.
+                        int[] hits = comps[random.nextInt(comps.length)];
+                        for (int t : hits) {
+                            if (t > 0 && random.nextDouble() > 0.5 + 0.5 * energy) continue;
+                            for (int i = 0; i < 3; i++) add(base + t, t % 4 == 0 ? 3 : 1.5, Song.CHORD + i, v[i], vel * 0.8, in);
+                        }
+                    }
+                    case SKANK -> {
+                        // Short chords off the beat.
+                        for (int t = 2; t < 16; t += 4) {
+                            for (int i = 0; i < 3; i++) add(base + t, 1.2, Song.CHORD + i, v[i], vel * 0.9, in);
+                            if (energy > 0.65 && t % 8 == 6) {
+                                for (int i = 0; i < 3; i++) add(base + t + 1, 0.8, Song.CHORD + i, v[i], vel * 0.6, in);
+                            }
                         }
                     }
                     case STRUM -> {
@@ -537,6 +606,30 @@ public final class Composer {
                         int[] seq = {root, random.nextBoolean() ? fifth : root + 12, fifth, approach};
                         for (int k = 0; k < 4; k++) add(base + 4 * k, 3.5, Song.BASS, seq[k], vel * (k == 0 ? 1 : 0.85), in);
                     }
+                    case EIGHTHS -> {
+                        boolean heavy = st.groove() == Style.Groove.DOUBLE_BASS;
+                        int step = energy < 0.4 ? 4 : heavy && sec.kind() == Kind.B && energy > 0.75 ? 1 : 2;
+                        for (int t = 0; t < 16; t += step) {
+                            int pitch = !heavy && t == 14 && random.nextDouble() < 0.4 ? fifth : root;
+                            add(base + t, step * 0.85, Song.BASS, pitch, vel * (t % 4 == 0 ? 1 : 0.85), in);
+                        }
+                    }
+                    case BOSSA -> {
+                        add(base, 5, Song.BASS, root, vel, in);
+                        add(base + 6, 2, Song.BASS, fifth, vel * 0.8, in);
+                        add(base + 8, 5, Song.BASS, fifth, vel * 0.9, in);
+                        add(base + 14, 2, Song.BASS, root, vel * 0.8, in);
+                    }
+                    case REGGAE -> {
+                        // A heavy, singing line that leaves room: it rests where the guitar plays.
+                        boolean high = random.nextBoolean();
+                        add(base, 2, Song.BASS, root, vel, in);
+                        if (energy > 0.35) add(base + 3, 1, Song.BASS, root, vel * 0.8, in);
+                        add(base + 4, 2, Song.BASS, fifth, vel * 0.9, in);
+                        add(base + 8, 1.5, Song.BASS, high ? root + 12 : fifth, vel * 0.9, in);
+                        if (energy > 0.5) add(base + 11, 1, Song.BASS, fifth, vel * 0.75, in);
+                        add(base + 12, 2.5, Song.BASS, root, vel, in);
+                    }
                     case PIANO -> {
                         add(base, 8, Song.BASS, root + 12, 0.75, in);
                         add(base + 8, 8, Song.BASS, fifth + (fifth + 12 > 60 ? 0 : 12), 0.6, in);
@@ -566,7 +659,7 @@ public final class Composer {
             int layerHits = new int[]{3, 5, 7}[layer.nextInt(3)];
             int layerTurn = layer.nextInt(Song.STEPS_PER_BAR);
             Drum layerDrum = switch (groove) {
-                case BOOM_BAP, EPIC -> Drum.SHAKER;
+                case BOOM_BAP, EPIC, BOSSA, SWING, ONE_DROP -> Drum.SHAKER;
                 default -> Drum.TOM;
             };
             for (int bar = 0; bar < bars; bar++) {
@@ -627,6 +720,76 @@ public final class Composer {
                         for (int t = 0; t < 16; t++) {
                             if (t % 2 == 0 || e > 0.5) hit(hits, t, Drum.SHAKER, t % 4 == 0 ? 0.55 : t % 2 == 0 ? 0.4 : 0.25);
                         }
+                    }
+                    case DOUBLE_BASS -> {
+                        // Two bass drums: eighths, a gallop, or every sixteenth.
+                        for (int t = 0; t < 16; t++) {
+                            boolean on = e > 0.75 || (e > 0.45 ? t % 4 != 1 : t % 2 == 0);
+                            if (on) hit(hits, t, Drum.KICK, t % 4 == 0 ? 1 : 0.7);
+                        }
+                        hit(hits, 4, Drum.SNARE, 1);
+                        hit(hits, 12, Drum.SNARE, 1);
+                        for (int t = 0; t < 16; t += 2) hit(hits, t, Drum.HAT, t % 4 == 0 ? 0.6 : 0.4);
+                        if (sec.kind() == Kind.B) hit(hits, 8, Drum.OPEN_HAT, 0.6);
+                    }
+                    case ROCK -> {
+                        hit(hits, 0, Drum.KICK, 1);
+                        hit(hits, 8, Drum.KICK, 0.9);
+                        if (e > 0.4) hit(hits, 10, Drum.KICK, 0.85);
+                        if (e > 0.7 && random.nextBoolean()) hit(hits, 7, Drum.KICK, 0.7);
+                        hit(hits, 4, Drum.SNARE, 1);
+                        hit(hits, 12, Drum.SNARE, 1);
+                        // The chorus rides on the open cymbal.
+                        if (sec.kind() == Kind.B) for (int t = 0; t < 16; t += 4) hit(hits, t, Drum.OPEN_HAT, 0.55);
+                        else for (int t = 0; t < 16; t += 2) hit(hits, t, Drum.HAT, t % 4 == 0 ? 0.65 : 0.45);
+                    }
+                    case BACKBEAT -> {
+                        hit(hits, 0, Drum.KICK, 1);
+                        hit(hits, 10, Drum.KICK, 0.85);
+                        if (e > 0.5) hit(hits, 6, Drum.KICK, 0.75);
+                        if (e > 0.75) hit(hits, 8, Drum.KICK, 0.8);
+                        hit(hits, 4, Drum.SNARE, 0.9);
+                        hit(hits, 12, Drum.SNARE, 0.95);
+                        for (int t = 0; t < 16; t += e > 0.7 ? 1 : 2) {
+                            hit(hits, t, Drum.HAT, t % 4 == 0 ? 0.55 : t % 2 == 0 ? 0.42 : 0.28);
+                        }
+                        if (random.nextDouble() < e * 0.5) hit(hits, 14, Drum.OPEN_HAT, 0.4);
+                    }
+                    case BOSSA -> {
+                        for (int t : new int[]{0, 3, 6, 10, 13}) hit(hits, t, Drum.CLAP, t == 0 ? 0.7 : 0.6);
+                        hit(hits, 0, Drum.KICK, 0.6);
+                        hit(hits, 6, Drum.KICK, 0.45);
+                        hit(hits, 8, Drum.KICK, 0.6);
+                        hit(hits, 14, Drum.KICK, 0.45);
+                        for (int t = 0; t < 16; t += e > 0.5 ? 1 : 2) {
+                            hit(hits, t, Drum.SHAKER, t % 4 == 0 ? 0.5 : t % 2 == 0 ? 0.38 : 0.25);
+                        }
+                    }
+                    case SWING -> {
+                        // The ride cymbal: ding, ding-a ding, ding-a; the hi-hat closes on two and four.
+                        for (int t : new int[]{0, 4, 6, 8, 12, 14}) hit(hits, t, Drum.HAT, t % 4 == 0 ? 0.6 : 0.4);
+                        hit(hits, 4, Drum.SHAKER, 0.5);
+                        hit(hits, 12, Drum.SHAKER, 0.5);
+                        if (e > 0.4) {
+                            hit(hits, 0, Drum.KICK, 0.4);
+                            hit(hits, 8, Drum.KICK, 0.35);
+                        }
+                        for (int t : new int[]{6, 10, 14}) {
+                            if (random.nextDouble() < e * 0.4) hit(hits, t, Drum.SNARE, 0.4);
+                        }
+                    }
+                    case ONE_DROP -> {
+                        // Bass drum and rim click fall together on two and four; one stays empty.
+                        for (int t = 4; t < 16; t += 8) {
+                            hit(hits, t, Drum.KICK, 0.95);
+                            hit(hits, t, Drum.CLAP, 0.85);
+                        }
+                        if (e > 0.8) {
+                            hit(hits, 0, Drum.KICK, 0.8);
+                            hit(hits, 8, Drum.KICK, 0.8);
+                        }
+                        for (int t = 0; t < 16; t += 2) hit(hits, t, Drum.HAT, t % 4 == 2 ? 0.6 : 0.4);
+                        if (e > 0.6 && random.nextBoolean()) hit(hits, 15, Drum.HAT, 0.3);
                     }
                     case EPIC -> {
                         int[] pattern = euclid(5, 16, 0);

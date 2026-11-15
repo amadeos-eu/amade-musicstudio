@@ -11,6 +11,8 @@ import eu.amadeos.apps.musicstudio.service.compose.Drum;
 import eu.amadeos.apps.musicstudio.service.compose.Song;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import java.util.EnumSet;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
@@ -181,6 +183,93 @@ class AudioRendererTest {
                 assertTrue(peak > 0.01, kit + " " + d);
             }
         }
+    }
+
+    @Test
+    void theDistortedGuitarStaysLoudWhileTheCleanOneDiesAway() {
+        Synth synth = new Synth();
+        float[] clean = synth.note(Instrument.ELECTRIC_GUITAR, 52, 0.9, 2.0, Tone.NEUTRAL, 44_100, 1);
+        float[] driven = synth.note(Instrument.DISTORTED_GUITAR, 52, 0.9, 2.0, Tone.NEUTRAL, 44_100, 1);
+        double cleanLeft = rms(clean, 66_000, 8000) / rms(clean, 2000, 8000);
+        double drivenLeft = rms(driven, 66_000, 8000) / rms(driven, 2000, 8000);
+        assertTrue(cleanLeft < 0.5, "the clean string has faded after a second and a half: " + cleanLeft);
+        assertTrue(drivenLeft > 0.5 && drivenLeft > 2 * cleanLeft,
+                "the amplifier holds the note: " + drivenLeft + " against " + cleanLeft);
+        float[] muted = synth.note(Instrument.DISTORTED_GUITAR, 40, 0.9, 0.08, Tone.NEUTRAL, 44_100, 1);
+        assertTrue(muted.length < 44_100 / 2, "a short note is cut off: " + muted.length);
+    }
+
+    @Test
+    void aChordOnTheDistortedGuitarGoesThroughOneAmplifier() {
+        Synth synth = new Synth();
+        int sr = 44_100;
+        float[] root = synth.string(40, 0.9, 1.0, Tone.NEUTRAL, sr, 1);
+        float[] fifth = synth.string(47, 0.9, 1.0, Tone.NEUTRAL, sr, 2);
+        float[] together = new float[root.length];
+        for (int i = 0; i < together.length; i++) together[i] = root[i] + fifth[i];
+        Amp.play(together, sr);
+        Amp.play(root, sr);
+        Amp.play(fifth, sr);
+        // Two notes in one amplifier give a note that neither has: the difference of their frequencies,
+        // an octave below the root of a fifth.
+        double below = Dsp.hz(40) / 2;
+        double apart = tone(root, below, sr) + tone(fifth, below, sr);
+        assertTrue(tone(together, below, sr) > 5 * apart, "the chord growls: " + tone(together, below, sr)
+                + " against " + apart);
+        Recipe metal = Recipe.of(Style.METAL, 3).with(b -> b.lengthSeconds = 20);
+        assertTrue(AudioRenderer.amped(metal, Part.CHORDS) && AudioRenderer.amped(metal, Part.MELODY));
+        assertFalse(AudioRenderer.amped(metal, Part.BASS));
+        Stems stems = renderer.render(new Composer().compose(metal, false), DIRECT, () -> false);
+        assertTrue(rms(stems.left().get(Part.CHORDS), 0, stems.frames()) > 1e-3);
+    }
+
+    /** How strong one frequency is in the middle of a note. */
+    private static double tone(float[] x, double f, double sr) {
+        double re = 0;
+        double im = 0;
+        int from = (int) (0.2 * sr);
+        int n = (int) (0.5 * sr);
+        for (int i = 0; i < n; i++) {
+            double window = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / n);
+            re += x[from + i] * window * Math.cos(2 * Math.PI * f * i / sr);
+            im += x[from + i] * window * Math.sin(2 * Math.PI * f * i / sr);
+        }
+        return Math.hypot(re, im) / n;
+    }
+
+    @Test
+    void thePluckedStringsAreInTune() {
+        Synth synth = new Synth();
+        int sr = 44_100;
+        for (Instrument in : List.of(Instrument.GUITAR, Instrument.HARP, Instrument.ELECTRIC_GUITAR,
+                Instrument.DISTORTED_GUITAR, Instrument.ELECTRIC_BASS, Instrument.UPRIGHT_BASS)) {
+            for (int pitch : new int[]{40, 52, 64, 69, 76, 81, 84, 88}) {
+                float[] x = synth.note(in, pitch, 0.8, 1.5, Tone.NEUTRAL, sr, 1);
+                double cents = centsOff(x, Dsp.hz(pitch), sr);
+                assertEquals(0, cents, 5, in + " at " + pitch + " is off by " + cents + " cents");
+            }
+        }
+    }
+
+    /** How far a note is from its pitch, from the lag at which eight periods match themselves best. */
+    private static double centsOff(float[] x, double f, double sr) {
+        int from = (int) (0.15 * sr);
+        int n = (int) (0.4 * sr);
+        double period = sr / f;
+        double best = Double.NEGATIVE_INFINITY;
+        double bestLag = period;
+        for (double lag = period * 0.95; lag <= period * 1.05; lag += 0.02) {
+            double far = lag * 8;
+            int whole = (int) far;
+            double frac = far - whole;
+            double sum = 0;
+            for (int i = from; i < from + n; i++) sum += x[i] * (x[i + whole] * (1 - frac) + x[i + whole + 1] * frac);
+            if (sum > best) {
+                best = sum;
+                bestLag = lag;
+            }
+        }
+        return 1200 * Math.log(period / bestLag) / Math.log(2);
     }
 
     @Test

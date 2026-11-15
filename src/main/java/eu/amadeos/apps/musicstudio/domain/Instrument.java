@@ -35,7 +35,12 @@ public enum Instrument {
     CHILD_AAH(Group.VOICE, true, 52),
     CHOIR_OOH(Group.VOICE, true, 53),
     CHOIR_AAH(Group.VOICE, true, 52),
-    CHOIR_MMM(Group.VOICE, true, 53);
+    CHOIR_MMM(Group.VOICE, true, 53),
+    DISTORTED_GUITAR(Group.STRINGS, false, 30),
+    ELECTRIC_GUITAR(Group.STRINGS, false, 27),
+    VIBRAPHONE(Group.MALLETS, false, 11),
+    SAXOPHONE(Group.WIND, true, 66),
+    UPRIGHT_BASS(Group.BASS, false, 32);
 
     /** The groups of the instrument chooser. */
     public enum Group {

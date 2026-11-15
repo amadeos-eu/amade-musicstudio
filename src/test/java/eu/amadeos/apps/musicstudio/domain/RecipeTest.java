@@ -59,7 +59,7 @@ class RecipeTest {
     @Test
     void notARecipe() {
         assertThrows(IllegalArgumentException.class, () -> Recipe.parse("hello"));
-        assertThrows(IllegalArgumentException.class, () -> Recipe.parse("style=jazz; seed=1"));
+        assertThrows(IllegalArgumentException.class, () -> Recipe.parse("style=polka; seed=1"));
         assertThrows(IllegalArgumentException.class, () -> Recipe.parse("style=lofi; seed=-3"));
         assertThrows(IllegalArgumentException.class, () -> Recipe.of(Style.LOFI, Recipe.MAX_SEED + 1));
     }

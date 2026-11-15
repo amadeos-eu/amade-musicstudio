@@ -9,14 +9,16 @@
 
 ## Features
 
-- **Eight styles**, each with its own rules for scales, chords, melody, bass line and rhythm:
+- **Fourteen styles**, each with its own rules for scales, chords, melody, bass line and rhythm:
   - *Ambient* (soundscapes), *Lo-Fi* (relaxed beats), *Chiptune* (video game), *Piano* (piano piece)
   - *Electro* (dance floor), *Meditation* (calm), *Acoustic* (campfire), *Adventure* (film score)
+  - *Heavy Metal* (power chords on a distorted guitar, two bass drums), *Rock* (guitars and drums), *Pop* (catchy song)
+  - *Lounge* (bossa with vibraphone and brushes), *Jazz* (a swing quartet with a walking bass), *Reggae* (chords off the beat, the drums drop on two and four)
 - **Six parts**, shown like a piano roll, one lane each: *Melody*, *Chords*, *Bass* and *Drums*, and the two extras *Pad* (two long notes of every chord) and *Arpeggio* (the notes of the chord one after another). Every lane has:
   - its instrument or drum kit; pad and arpeggio can be switched *Off* there
   - mute (M), solo (S) and volume
   - *Keep*: *New Piece* leaves this part as it is and only writes the others anew
-- **Sixteen synthesized instruments** in groups: piano, electric piano, organ, bells, marimba, strings, harp, plucked guitar, flute, warm pad, synth lead, two chip sounds and three basses. Five drum kits: none, soft, electronic, lo-fi and chip.
+- **Twenty-one synthesized instruments** in groups: piano, electric piano, organ, bells, marimba, vibraphone, strings, harp, plucked guitar, electric guitar, distorted guitar, flute, saxophone, warm pad, synth lead, two chip sounds and four basses. Seven drum kits: none, soft, electronic, lo-fi, chip, rock and brush.
 - **Nine sung voices** without words, synthesized like the instruments: a man, a woman and a child singing *ooh* or *aah*, and a choir of six singing *ooh*, *aah* or humming. Every voice can sing every part.
 - **The instrument chooser** (the keyboard button of a lane) describes each instrument, shows its waveform and lets you try it on a two-octave keyboard, with the mouse or the computer keys A to L. Attack, release and octave can be set there too, and two movements in time with the piece: a *filter sweep* that closes and opens the sound, and a *tremolo* that lets the volume sink and rise, each in waves of eight bars down to an eighth note, or once over the whole piece: the filter opening or closing, the volume growing or fading from the first bar to the last.
 - **The recipe** on the right:
