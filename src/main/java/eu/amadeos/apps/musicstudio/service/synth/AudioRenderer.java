@@ -65,6 +65,7 @@ public final class AudioRenderer {
                     case ELECTRONIC -> 0.4;
                     case CHIP -> 0.5;
                     case LOFI -> 0.75;
+                    case ROCK -> 0.45;
                     default -> 0.9;
                 };
                 default -> 1;
@@ -76,6 +77,8 @@ public final class AudioRenderer {
             case SYNTH_BASS -> 0.6;
             case CHIP_TRIANGLE -> 0.7;
             case GUITAR, HARP -> 1.8;
+            case ELECTRIC_GUITAR -> 2.6;
+            case DISTORTED_GUITAR -> 1.9;
             case BELLS, MARIMBA -> 1.1;
             default -> 1;
         };

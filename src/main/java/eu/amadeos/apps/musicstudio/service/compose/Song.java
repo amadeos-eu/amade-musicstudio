@@ -55,12 +55,20 @@ public record Song(Recipe recipe, boolean loop, List<Note> notes, List<Section> 
         return steps() * stepSeconds();
     }
 
-    /** Where a note is heard, in sixteenths: every second sixteenth comes later when the piece swings. */
+    /** Where a note is heard, in sixteenths: every second sixteenth comes later when the piece swings,
+     * or every second eighth in a style that {@linkplain eu.amadeos.apps.musicstudio.domain.Style#shuffle() shuffles}. */
     public double heardAt(Note note) {
         return note.step() + swingOffset(note.step());
     }
 
     double swingOffset(double step) {
+        if (recipe.style().shuffle()) {
+            // The beat is stretched before its second eighth and squeezed after it.
+            double late = recipe.swing() / 100.0 * 2 / 3;
+            double inBeat = step - 4 * Math.floor(step / 4);
+            double heard = inBeat < 2 ? inBeat * (2 + late) / 2 : 2 + late + (inBeat - 2) * (2 - late) / 2;
+            return heard - inBeat;
+        }
         int whole = (int) Math.floor(step);
         return whole % 2 == 1 && step - whole < 0.05 ? recipe.swing() / 100.0 / 3 : 0;
     }

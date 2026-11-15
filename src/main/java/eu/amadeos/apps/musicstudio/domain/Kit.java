@@ -5,7 +5,7 @@ import java.util.Optional;
 
 /** How the drums sound; {@link #NONE} leaves them out. Never reorder: recipes store the id. */
 public enum Kit {
-    NONE, SOFT, ELECTRONIC, LOFI, CHIP;
+    NONE, SOFT, ELECTRONIC, LOFI, CHIP, ROCK, BRUSH;
 
     public String id() {
         return name().toLowerCase(Locale.ROOT);

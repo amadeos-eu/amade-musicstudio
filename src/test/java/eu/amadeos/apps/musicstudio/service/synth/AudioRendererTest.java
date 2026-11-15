@@ -184,6 +184,20 @@ class AudioRendererTest {
     }
 
     @Test
+    void theDistortedGuitarStaysLoudWhileTheCleanOneDiesAway() {
+        Synth synth = new Synth();
+        float[] clean = synth.note(Instrument.ELECTRIC_GUITAR, 52, 0.9, 2.0, Tone.NEUTRAL, 44_100, 1);
+        float[] driven = synth.note(Instrument.DISTORTED_GUITAR, 52, 0.9, 2.0, Tone.NEUTRAL, 44_100, 1);
+        double cleanLeft = rms(clean, 66_000, 8000) / rms(clean, 2000, 8000);
+        double drivenLeft = rms(driven, 66_000, 8000) / rms(driven, 2000, 8000);
+        assertTrue(cleanLeft < 0.5, "the clean string has faded after a second and a half: " + cleanLeft);
+        assertTrue(drivenLeft > 0.5 && drivenLeft > 2 * cleanLeft,
+                "the amplifier holds the note: " + drivenLeft + " against " + cleanLeft);
+        float[] muted = synth.note(Instrument.DISTORTED_GUITAR, 40, 0.9, 0.08, Tone.NEUTRAL, 44_100, 1);
+        assertTrue(muted.length < 44_100 / 2, "a short note is cut off: " + muted.length);
+    }
+
+    @Test
     void aSoftAttackStartsQuieter() {
         float[] hard = renderer.noteSample(Recipe.of(Style.LOFI, 1).withVoice(Part.MELODY,
                 Voice.of(Instrument.STRINGS).withAttack(0)), Part.MELODY, 60, 1, AudioRenderer.SAMPLE_RATE);

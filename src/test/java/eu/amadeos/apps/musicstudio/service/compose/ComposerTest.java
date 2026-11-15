@@ -466,6 +466,64 @@ class ComposerTest {
         });
     }
 
+    @Test
+    void heavyMetalPlaysPowerChordsOnTheDistortedGuitar() {
+        Recipe r = Recipe.of(Style.METAL, 11).with(b -> { b.variety = 0; b.harmony = 0; });
+        assertEquals(eu.amadeos.apps.musicstudio.domain.Instrument.DISTORTED_GUITAR, r.chords().instrument());
+        assertEquals(Kit.ROCK, r.kit());
+        Song song = composer.compose(r, false);
+        for (int bar = 0; bar < song.bars(); bar++) {
+            List<Note> chord = inBar(song, Part.CHORDS, bar);
+            assertFalse(chord.isEmpty(), "bar " + bar);
+            int root = chord.stream().mapToInt(Note::pitch).min().orElseThrow();
+            assertTrue(root >= 40 && root < 52, "low on the neck: " + root);
+            for (Note n : chord) {
+                int above = (n.pitch() - root) % 12;
+                assertTrue(above == 0 || above == 7, "only root and fifth, no third: " + above);
+            }
+        }
+        int middle = song.sections().get(1).startBar();
+        long kicks = inBar(song, Part.DRUMS, middle).stream().filter(n -> n.drum() == Drum.KICK).count();
+        assertTrue(kicks >= 12, "two bass drums: " + kicks);
+    }
+
+    @Test
+    void reggaePlaysItsChordsOffTheBeatAndTheDrumsDropOnTwoAndFour() {
+        Recipe r = Recipe.of(Style.REGGAE, 5).with(b -> { b.variety = 0; b.energy = 50; });
+        Song song = composer.compose(r, false);
+        int bar = song.sections().get(1).startBar();
+        for (Note n : inBar(song, Part.CHORDS, bar)) assertEquals(2, n.step() % 4, 1e-9, "off the beat");
+        List<Double> kicks = inBar(song, Part.DRUMS, bar).stream().filter(n -> n.drum() == Drum.KICK)
+                .map(n -> n.step() % 16).toList();
+        assertEquals(List.of(4.0, 12.0), kicks);
+    }
+
+    @Test
+    void jazzAndReggaeSwingInEighths() {
+        Recipe jazz = Recipe.of(Style.JAZZ, 3).with(b -> b.swing = 100);
+        Song song = composer.compose(jazz, false);
+        assertEquals(0, song.swingOffset(0), 1e-9);
+        assertEquals(2 / 3.0, song.swingOffset(2), 1e-9, "the second eighth comes as late as a triplet");
+        assertEquals(0, song.swingOffset(4), 1e-9, "the next beat is in its place");
+        assertEquals(1 / 3.0, song.swingOffset(1), 1e-9);
+        assertEquals(1 / 3.0, song.swingOffset(3), 1e-9);
+        assertEquals(0, composer.compose(jazz.with(b -> b.swing = 0), false).swingOffset(2), 1e-9);
+        Song lofi = composer.compose(Recipe.of(Style.LOFI, 3).with(b -> b.swing = 100), false);
+        assertEquals(0, lofi.swingOffset(2), 1e-9, "the other styles swing in sixteenths");
+        assertEquals(1 / 3.0, lofi.swingOffset(1), 1e-9);
+    }
+
+    @Test
+    void loungeAndJazzPlayChordsWithTheirSeventh() {
+        for (Style style : List.of(Style.LOUNGE, Style.JAZZ)) {
+            Recipe r = Recipe.of(style, 9).with(b -> { b.variety = 0; b.harmony = 0; });
+            Song song = composer.compose(r, false);
+            int bar = song.sections().get(1).startBar();
+            assertEquals(4, song.chordsPerBar()[bar].length, style + " has four notes in a chord");
+            assertEquals(Kit.BRUSH, r.kit());
+        }
+    }
+
     private static String where(Note n) {
         return n.step() + "/" + n.channel() + "/" + n.pitch();
     }

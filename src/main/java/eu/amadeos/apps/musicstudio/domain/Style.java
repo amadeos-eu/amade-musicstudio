@@ -32,12 +32,31 @@ public enum Style {
             50, 25, 30, 40, 30, 60, 0, 69, 84),
     ADVENTURE(100, Scale.HARMONIC_MINOR, Scale.MINOR, 1, false, Accompaniment.BROKEN, BassLine.WALK, Groove.EPIC,
             Instrument.FLUTE, Instrument.HARP, Instrument.STRINGS, Kit.SOFT,
-            55, 0, 55, 65, 60, 60, 0, 69, 86);
+            55, 0, 55, 65, 60, 60, 0, 69, 86),
+    METAL(150, Scale.MINOR, Scale.MINOR, 1, false, Accompaniment.POWER, BassLine.EIGHTHS, Groove.DOUBLE_BASS,
+            Instrument.DISTORTED_GUITAR, Instrument.DISTORTED_GUITAR, Instrument.ELECTRIC_BASS, Kit.ROCK,
+            60, 0, 85, 85, 20, 70, 0, 64, 88),
+    ROCK(124, Scale.MIXOLYDIAN, Scale.MIXOLYDIAN, 1, false, Accompaniment.POWER, BassLine.EIGHTHS, Groove.ROCK,
+            Instrument.DISTORTED_GUITAR, Instrument.DISTORTED_GUITAR, Instrument.ELECTRIC_BASS, Kit.ROCK,
+            55, 0, 65, 70, 25, 65, 0, 64, 86),
+    POP(112, Scale.MAJOR, Scale.MAJOR, 1, false, Accompaniment.STABS, BassLine.EIGHTHS, Groove.BACKBEAT,
+            Instrument.SYNTH_LEAD, Instrument.PIANO, Instrument.ELECTRIC_BASS, Kit.ROCK,
+            55, 0, 50, 60, 35, 70, 0, 67, 84),
+    LOUNGE(96, Scale.MAJOR, Scale.MAJOR, 1, true, Accompaniment.BOSSA, BassLine.BOSSA, Groove.BOSSA,
+            Instrument.VIBRAPHONE, Instrument.ELECTRIC_PIANO, Instrument.UPRIGHT_BASS, Kit.BRUSH,
+            40, 0, 25, 40, 45, 50, 0, 65, 84),
+    JAZZ(132, Scale.DORIAN, Scale.DORIAN, 1, true, Accompaniment.COMP, BassLine.WALK, Groove.SWING,
+            Instrument.SAXOPHONE, Instrument.PIANO, Instrument.UPRIGHT_BASS, Kit.BRUSH,
+            55, 60, 30, 50, 35, 55, 0, 60, 79),
+    REGGAE(76, Scale.MAJOR, Scale.MAJOR, 1, false, Accompaniment.SKANK, BassLine.REGGAE, Groove.ONE_DROP,
+            Instrument.SAXOPHONE, Instrument.ELECTRIC_GUITAR, Instrument.ELECTRIC_BASS, Kit.ROCK,
+            45, 25, 40, 50, 35, 55, 0, 60, 79);
 
     /** Scales as semitones above the key note. */
     public enum Scale {
         MAJOR(0, 2, 4, 5, 7, 9, 11), MINOR(0, 2, 3, 5, 7, 8, 10), DORIAN(0, 2, 3, 5, 7, 9, 10),
-        LYDIAN(0, 2, 4, 6, 7, 9, 11), PENTATONIC(0, 2, 4, 7, 9), HARMONIC_MINOR(0, 2, 3, 5, 7, 8, 11);
+        LYDIAN(0, 2, 4, 6, 7, 9, 11), PENTATONIC(0, 2, 4, 7, 9), HARMONIC_MINOR(0, 2, 3, 5, 7, 8, 11),
+        MIXOLYDIAN(0, 2, 4, 5, 7, 9, 10);
 
         private final int[] steps;
 
@@ -64,13 +83,15 @@ public enum Style {
     }
 
     /** How the chords are played. */
-    public enum Accompaniment { SUSTAIN, STABS, ARPEGGIO, ALBERTI, BROKEN, STRUM }
+    public enum Accompaniment { SUSTAIN, STABS, ARPEGGIO, ALBERTI, BROKEN, STRUM, POWER, BOSSA, COMP, SKANK }
 
     /** How the bass is played. */
-    public enum BassLine { LONG, PULSE, OFFBEAT, BOOM, WALK, PIANO }
+    public enum BassLine { LONG, PULSE, OFFBEAT, BOOM, WALK, PIANO, EIGHTHS, BOSSA, REGGAE }
 
     /** The drum patterns. */
-    public enum Groove { NONE, HALFTIME, BOOM_BAP, CHIP, FOUR_ON_THE_FLOOR, FOLK, EPIC }
+    public enum Groove {
+        NONE, HALFTIME, BOOM_BAP, CHIP, FOUR_ON_THE_FLOOR, FOLK, EPIC, DOUBLE_BASS, ROCK, BACKBEAT, BOSSA, SWING, ONE_DROP
+    }
 
     private final int bpm;
     private final Scale melodyScale;
@@ -174,12 +195,21 @@ public enum Style {
         return groove == Groove.NONE ? Groove.HALFTIME : groove;
     }
 
+    /**
+     * Whether the style swings in eighths: the eighth off the beat comes later, up to a triplet, as in a
+     * shuffle. The other styles swing in sixteenths.
+     */
+    public boolean shuffle() {
+        return this == JAZZ || this == REGGAE;
+    }
+
     public Instrument defaultInstrument(Part part) {
         return switch (part) {
             case MELODY -> lead;
             case CHORDS -> chords;
             case PAD -> switch (this) {
-                case ADVENTURE, ACOUSTIC, PIANO -> Instrument.STRINGS;
+                case ADVENTURE, ACOUSTIC, PIANO, METAL, ROCK, LOUNGE, JAZZ -> Instrument.STRINGS;
+                case REGGAE -> Instrument.ORGAN;
                 case CHIPTUNE -> Instrument.CHIP_TRIANGLE;
                 case MEDITATION -> Instrument.CHOIR_MMM;
                 case AMBIENT -> Instrument.CHOIR_OOH;
@@ -191,6 +221,8 @@ public enum Style {
                 case LOFI -> Instrument.ELECTRIC_PIANO;
                 case PIANO -> Instrument.PIANO;
                 case ACOUSTIC -> Instrument.GUITAR;
+                case METAL, ROCK, POP, REGGAE -> Instrument.ELECTRIC_GUITAR;
+                case LOUNGE, JAZZ -> Instrument.VIBRAPHONE;
                 case AMBIENT -> Instrument.BELLS;
                 default -> Instrument.HARP;
             };
@@ -201,7 +233,8 @@ public enum Style {
     /** Whether a new piece of the style has the part: all have melody, chords and bass, some a pad or an arpeggio. */
     public boolean defaultPlays(Part part) {
         return switch (part) {
-            case PAD -> this == LOFI || this == ELECTRO || this == ADVENTURE;
+            case PAD -> this == LOFI || this == ELECTRO || this == ADVENTURE || this == POP || this == LOUNGE
+                    || this == REGGAE;
             case ARPEGGIO -> this == AMBIENT || this == ELECTRO || this == ADVENTURE;
             case DRUMS -> kit != Kit.NONE;
             default -> true;
@@ -212,7 +245,7 @@ public enum Style {
     public Voice defaultVoice(Part part) {
         Voice voice = Voice.of(defaultInstrument(part));
         if (part == Part.PAD) {
-            voice = voice.withVolume(60);
+            voice = voice.withVolume(this == LOUNGE || this == REGGAE ? 45 : 60);
             if (this == ELECTRO) voice = voice.withSweep(60, 2);
             if (this == LOFI) voice = voice.withSweep(30, 1);
         } else if (part == Part.ARPEGGIO) {
@@ -261,7 +294,8 @@ public enum Style {
             case AMBIENT -> 40;
             case ACOUSTIC -> 45;
             case ELECTRO -> 75;
-            case ADVENTURE -> 60;
+            case ADVENTURE, METAL, POP -> 60;
+            case LOUNGE, REGGAE -> 40;
             default -> 50;
         };
     }
@@ -275,7 +309,12 @@ public enum Style {
             case PIANO -> 35;
             case MEDITATION, ACOUSTIC -> 30;
             case ELECTRO -> 25;
-            case CHIPTUNE -> 10;
+            case CHIPTUNE, ROCK -> 10;
+            case METAL -> 0;
+            case POP -> 30;
+            case LOUNGE -> 70;
+            case JAZZ -> 75;
+            case REGGAE -> 15;
         };
     }
 
