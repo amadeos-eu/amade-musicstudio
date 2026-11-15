@@ -43,6 +43,13 @@ public final class AudioRenderer {
         return synth;
     }
 
+    /** How far a movement is down at a frame, 0 (open, full) to 1: a wave, or one course over the piece. */
+    private static double low(int rate, int frame, double waveFrames, double pieceFrames) {
+        if (!Voice.wholePiece(rate)) return 0.5 - 0.5 * Math.cos(2 * Math.PI * frame / waveFrames);
+        double done = 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, frame / pieceFrames));
+        return rate == Voice.RISING ? 1 - done : done;
+    }
+
     /** The stereo position of a channel, -1 (left) to 1 (right), for the MOD export too. */
     public static double pan(int channel) {
         return CHANNEL_PAN[channel];
@@ -177,8 +184,8 @@ public final class AudioRenderer {
             Dsp.lowPass(out, brightCutoff(r.brightness()), 0.6, SAMPLE_RATE);
         }
         if (part.tonal()) {
-            move(out, r.voice(part), stepSeconds, part == Part.BASS ? 5000 : Math.min(12_000, brightCutoff(r.brightness())),
-                    SAMPLE_RATE);
+            move(out, r.voice(part), stepSeconds, song.seconds(),
+                    part == Part.BASS ? 5000 : Math.min(12_000, brightCutoff(r.brightness())), SAMPLE_RATE);
         }
         return out;
     }
@@ -191,22 +198,25 @@ public final class AudioRenderer {
     /**
      * The movements of a voice in time with the piece. The sweep is a low-pass filter that starts open at
      * {@code open} Hz, closes by up to four and a half octaves and opens again; the tremolo lets the volume
-     * sink and rise again. Both start with the piece, so they fall on the same notes every time.
+     * sink and rise again. Both start with the piece, so they fall on the same notes every time. Instead of
+     * waves either can take one course over the {@code seconds} of the piece: rising, the filter starts closed
+     * and is open at the end and the volume grows to full; falling, the other way round.
      */
-    static void move(float[] x, Voice voice, double stepSeconds, double open, int sampleRate) {
+    static void move(float[] x, Voice voice, double stepSeconds, double seconds, double open, int sampleRate) {
         if (voice.sweep() == 0 && voice.tremolo() == 0) return;
-        double sweepFrames = voice.sweepSteps() * stepSeconds * sampleRate;
-        double tremoloFrames = voice.tremoloSteps() * stepSeconds * sampleRate;
+        double pieceFrames = Math.max(1, seconds * sampleRate);
+        double sweepFrames = Voice.wholePiece(voice.sweepRate()) ? 0 : voice.sweepSteps() * stepSeconds * sampleRate;
+        double tremoloFrames = Voice.wholePiece(voice.tremoloRate()) ? 0 : voice.tremoloSteps() * stepSeconds * sampleRate;
         double octaves = voice.sweep() / 100.0 * 4.5;
         double depth = voice.tremolo() / 100.0 * 0.9;
         Dsp.Filter filter = new Dsp.Filter();
-        double gain = 1;
-        double target = 1;
+        double target = 1 - depth * low(voice.tremoloRate(), 0, tremoloFrames, pieceFrames);
+        double gain = target;
         for (int i = 0; i < x.length; i++) {
             if (i % 32 == 0) {
-                double closed = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / sweepFrames);
+                double closed = low(voice.sweepRate(), i, sweepFrames, pieceFrames);
                 filter.set(open * Math.pow(2, -octaves * closed), 1.1, sampleRate);
-                target = 1 - depth * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / tremoloFrames));
+                target = 1 - depth * low(voice.tremoloRate(), i, tremoloFrames, pieceFrames);
             }
             gain += (target - gain) * 0.01;
             double v = voice.sweep() > 0 ? filter.process(x[i]) : x[i];

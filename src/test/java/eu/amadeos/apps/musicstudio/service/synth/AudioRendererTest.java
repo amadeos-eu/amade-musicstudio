@@ -49,14 +49,14 @@ class AudioRendererTest {
         double stepSeconds = 0.125; // one bar is two seconds
         float[] x = new float[4 * sr];
         java.util.Arrays.fill(x, 1f);
-        AudioRenderer.move(x, Voice.of(Instrument.STRINGS).withTremolo(100, 3), stepSeconds, 8000, sr);
+        AudioRenderer.move(x, Voice.of(Instrument.STRINGS).withTremolo(100, 3), stepSeconds, 4, 8000, sr);
         assertEquals(1, x[100], 0.02, "full at the start of the bar");
         assertEquals(0.1, x[sr], 0.02, "lowest in the middle of the bar");
         assertEquals(1, x[2 * sr - 1], 0.02, "full again at its end");
         assertEquals(0.1, x[3 * sr], 0.02, "and so on in the next bar");
         float[] still = new float[sr];
         java.util.Arrays.fill(still, 0.5f);
-        AudioRenderer.move(still, Voice.of(Instrument.STRINGS), stepSeconds, 8000, sr);
+        AudioRenderer.move(still, Voice.of(Instrument.STRINGS), stepSeconds, 4, 8000, sr);
         for (float v : still) assertEquals(0.5f, v, "a voice that does not move is left alone");
     }
 
@@ -66,12 +66,45 @@ class AudioRendererTest {
         double stepSeconds = 0.125;
         float[] x = new float[4 * sr];
         for (int i = 0; i < x.length; i++) x[i] = (float) Math.sin(2 * Math.PI * 3000 * i / sr);
-        AudioRenderer.move(x, Voice.of(Instrument.WARM_PAD).withSweep(100, 3), stepSeconds, 12_000, sr);
+        AudioRenderer.move(x, Voice.of(Instrument.WARM_PAD).withSweep(100, 3), stepSeconds, 4, 12_000, sr);
         double open = rms(x, 2 * sr - 2000, 1500);
         double closed = rms(x, sr - 750, 1500);
         assertTrue(open > 0.5, "3 kHz passes when the filter is open: " + open);
         assertTrue(closed < open / 10, "and hardly when it is closed: " + closed + " against " + open);
         assertEquals(closed, rms(x, 3 * sr - 750, 1500), closed / 2, "the same in the next bar");
+    }
+
+    @Test
+    void aCourseOverTheWholePieceRunsOnceInItsDirection() {
+        int sr = 8000;
+        float[] x = new float[10 * sr];
+        java.util.Arrays.fill(x, 1f);
+        AudioRenderer.move(x, Voice.of(Instrument.STRINGS).withTremolo(100, Voice.RISING), 0.125, 10, 8000, sr);
+        assertEquals(0.1, x[0], 0.02, "quiet from the first sample");
+        assertEquals(0.55, x[5 * sr], 0.02, "half way in the middle");
+        assertEquals(1, x[x.length - 1], 0.02, "full at the end");
+        for (int i = 1; i < x.length; i++) assertTrue(x[i] >= x[i - 1] - 1e-6, "it only grows");
+        float[] y = new float[10 * sr];
+        java.util.Arrays.fill(y, 1f);
+        AudioRenderer.move(y, Voice.of(Instrument.STRINGS).withTremolo(50, Voice.FALLING), 0.125, 10, 8000, sr);
+        assertEquals(1, y[100], 0.02, "full at the start");
+        assertEquals(0.55, y[y.length - 1], 0.02, "down by the depth at the end");
+    }
+
+    @Test
+    void aSweepOverTheWholePieceOpensOrClosesTheFilter() {
+        int sr = 44_100;
+        float[] x = new float[4 * sr];
+        for (int i = 0; i < x.length; i++) x[i] = (float) Math.sin(2 * Math.PI * 3000 * i / sr);
+        float[] y = x.clone();
+        AudioRenderer.move(x, Voice.of(Instrument.WARM_PAD).withSweep(100, Voice.RISING), 0.125, 4, 12_000, sr);
+        double start = rms(x, 2000, 1500);
+        double end = rms(x, x.length - 2000, 1500);
+        assertTrue(end > 0.5, "open at the end: " + end);
+        assertTrue(start < end / 10, "closed at the start: " + start);
+        AudioRenderer.move(y, Voice.of(Instrument.WARM_PAD).withSweep(100, Voice.FALLING), 0.125, 4, 12_000, sr);
+        assertTrue(rms(y, 2000, 1500) > 0.5, "falling, it starts open");
+        assertTrue(rms(y, y.length - 2000, 1500) < 0.05, "and ends closed");
     }
 
     @Test
