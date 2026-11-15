@@ -97,7 +97,7 @@ class MusicServiceTest {
 
     @Test
     void previewIsOneShortNote() {
-        Audio note = service.preview(new Voice(Instrument.PIANO, 0, 50, 50, 75), 60);
+        Audio note = service.preview(Voice.of(Instrument.PIANO), 60);
         assertTrue(note.seconds() > 0.2 && note.seconds() < 5, note.seconds() + " s");
         assertFalse(note.frames() == 0);
     }

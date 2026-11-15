@@ -68,6 +68,7 @@ public final class ExportService {
                 if (options.stems()) {
                     for (Part part : Part.values()) {
                         if (cancelled.getAsBoolean()) throw new CancellationException();
+                        if (part.extra() && !recipe.plays(part)) continue;
                         Audio one = renderer.mix(stems, recipe, EnumSet.of(part));
                         written.add(writeAudio(options.format(), one, comment, stemPath(target, part)));
                     }

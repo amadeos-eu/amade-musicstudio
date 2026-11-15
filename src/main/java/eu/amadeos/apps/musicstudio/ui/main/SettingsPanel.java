@@ -27,8 +27,8 @@ import java.util.EnumMap;
 import java.util.Map;
 
 /**
- * The recipe on the right: seed, key and length; the beat (tempo, hardness, swing, energy, fills) and the sound
- * (brightness, hall, crackle). A slider takes effect when it is let go.
+ * The recipe on the right: seed, key, length and harmony; the beat (tempo, hardness, swing, energy, fills, variety)
+ * and the sound (brightness, hall, crackle). A slider takes effect when it is let go.
  */
 public final class SettingsPanel extends JPanel {
     static final int WIDTH = 270;
@@ -86,6 +86,7 @@ public final class SettingsPanel extends JPanel {
             if (!updating && i >= 0) presenter.setLength(Recipe.LENGTHS.get(i));
         });
         field("settings.length", length);
+        slider(Slider.HARMONY, true);
 
         heading("settings.beat");
         slider(Slider.TEMPO, false);
@@ -93,6 +94,7 @@ public final class SettingsPanel extends JPanel {
         slider(Slider.SWING, true);
         slider(Slider.ENERGY, true);
         slider(Slider.FILLS, true);
+        slider(Slider.VARIETY, true);
         heading("settings.sound");
         slider(Slider.BRIGHTNESS, true);
         slider(Slider.REVERB, true);

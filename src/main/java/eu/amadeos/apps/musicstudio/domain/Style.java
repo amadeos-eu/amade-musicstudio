@@ -178,8 +178,51 @@ public enum Style {
         return switch (part) {
             case MELODY -> lead;
             case CHORDS -> chords;
+            case PAD -> switch (this) {
+                case ADVENTURE, ACOUSTIC, PIANO -> Instrument.STRINGS;
+                case CHIPTUNE -> Instrument.CHIP_TRIANGLE;
+                case MEDITATION -> Instrument.CHOIR_MMM;
+                case AMBIENT -> Instrument.CHOIR_OOH;
+                default -> Instrument.WARM_PAD;
+            };
+            case ARPEGGIO -> switch (this) {
+                case ELECTRO -> Instrument.SYNTH_LEAD;
+                case CHIPTUNE -> Instrument.CHIP_SQUARE;
+                case LOFI -> Instrument.ELECTRIC_PIANO;
+                case PIANO -> Instrument.PIANO;
+                case ACOUSTIC -> Instrument.GUITAR;
+                case AMBIENT -> Instrument.BELLS;
+                default -> Instrument.HARP;
+            };
             default -> bass;
         };
+    }
+
+    /** Whether a new piece of the style has the part: all have melody, chords and bass, some a pad or an arpeggio. */
+    public boolean defaultPlays(Part part) {
+        return switch (part) {
+            case PAD -> this == LOFI || this == ELECTRO || this == ADVENTURE;
+            case ARPEGGIO -> this == AMBIENT || this == ELECTRO || this == ADVENTURE;
+            case DRUMS -> kit != Kit.NONE;
+            default -> true;
+        };
+    }
+
+    /** The voice a new piece of the style gives the part: its instrument, its volume and how it moves. */
+    public Voice defaultVoice(Part part) {
+        Voice voice = Voice.of(defaultInstrument(part));
+        if (part == Part.PAD) {
+            voice = voice.withVolume(60);
+            if (this == ELECTRO) voice = voice.withSweep(60, 2);
+            if (this == LOFI) voice = voice.withSweep(30, 1);
+        } else if (part == Part.ARPEGGIO) {
+            voice = voice.withVolume(this == AMBIENT ? 45 : this == ADVENTURE ? 70 : 60);
+            if (this == ELECTRO) voice = voice.withSweep(50, 1);
+            if (this == AMBIENT) voice = voice.withTremolo(25, 3);
+        } else if (part == Part.CHORDS && this == AMBIENT) {
+            voice = voice.withSweep(30, 0);
+        }
+        return voice;
     }
 
     public Kit defaultKit() {
@@ -209,6 +252,31 @@ public enum Style {
 
     public int defaultBrightness() {
         return brightness;
+    }
+
+    /** How much the parts rest and come back, 0 to 100; see {@link Recipe#variety()}. */
+    public int defaultVariety() {
+        return switch (this) {
+            case PIANO, MEDITATION -> 30;
+            case AMBIENT -> 40;
+            case ACOUSTIC -> 45;
+            case ELECTRO -> 75;
+            case ADVENTURE -> 60;
+            default -> 50;
+        };
+    }
+
+    /** How many chords are coloured, 0 to 100; see {@link Recipe#harmony()}. */
+    public int defaultHarmony() {
+        return switch (this) {
+            case LOFI -> 60;
+            case AMBIENT -> 50;
+            case ADVENTURE -> 45;
+            case PIANO -> 35;
+            case MEDITATION, ACOUSTIC -> 30;
+            case ELECTRO -> 25;
+            case CHIPTUNE -> 10;
+        };
     }
 
     public int defaultCrackle() {

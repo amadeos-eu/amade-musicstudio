@@ -44,6 +44,57 @@ class AudioRendererTest {
     }
 
     @Test
+    void tremoloLetsTheVolumeSinkAndRiseInTimeWithThePiece() {
+        int sr = 8000;
+        double stepSeconds = 0.125; // one bar is two seconds
+        float[] x = new float[4 * sr];
+        java.util.Arrays.fill(x, 1f);
+        AudioRenderer.move(x, Voice.of(Instrument.STRINGS).withTremolo(100, 3), stepSeconds, 8000, sr);
+        assertEquals(1, x[100], 0.02, "full at the start of the bar");
+        assertEquals(0.1, x[sr], 0.02, "lowest in the middle of the bar");
+        assertEquals(1, x[2 * sr - 1], 0.02, "full again at its end");
+        assertEquals(0.1, x[3 * sr], 0.02, "and so on in the next bar");
+        float[] still = new float[sr];
+        java.util.Arrays.fill(still, 0.5f);
+        AudioRenderer.move(still, Voice.of(Instrument.STRINGS), stepSeconds, 8000, sr);
+        for (float v : still) assertEquals(0.5f, v, "a voice that does not move is left alone");
+    }
+
+    @Test
+    void theSweepClosesAndOpensTheFilter() {
+        int sr = 44_100;
+        double stepSeconds = 0.125;
+        float[] x = new float[4 * sr];
+        for (int i = 0; i < x.length; i++) x[i] = (float) Math.sin(2 * Math.PI * 3000 * i / sr);
+        AudioRenderer.move(x, Voice.of(Instrument.WARM_PAD).withSweep(100, 3), stepSeconds, 12_000, sr);
+        double open = rms(x, 2 * sr - 2000, 1500);
+        double closed = rms(x, sr - 750, 1500);
+        assertTrue(open > 0.5, "3 kHz passes when the filter is open: " + open);
+        assertTrue(closed < open / 10, "and hardly when it is closed: " + closed + " against " + open);
+        assertEquals(closed, rms(x, 3 * sr - 750, 1500), closed / 2, "the same in the next bar");
+    }
+
+    @Test
+    void padAndArpeggioAreStemsOfTheirOwn() {
+        Recipe r = shortPiece(Style.ELECTRO);
+        Stems stems = renderer.render(new Composer().compose(r, false), DIRECT, () -> false);
+        for (Part p : Part.values()) {
+            assertTrue(rms(stems.left().get(p), 0, stems.frames()) > 1e-4, p + " is heard");
+        }
+        Recipe plain = r.withPlaying(Part.PAD, false).withPlaying(Part.ARPEGGIO, false);
+        Stems without = renderer.render(new Composer().compose(plain, false), DIRECT, () -> false);
+        assertEquals(0, rms(without.left().get(Part.PAD), 0, without.frames()));
+        assertEquals(0, rms(without.right().get(Part.ARPEGGIO), 0, without.frames()));
+        assertArrayEquals(stems.left().get(Part.MELODY), without.left().get(Part.MELODY));
+    }
+
+    private static double rms(float[] x, int from, int length) {
+        double sum = 0;
+        for (int i = from; i < from + length; i++) sum += x[i] * x[i];
+        return Math.sqrt(sum / length);
+    }
+
+    @Test
     void theSameRecipeSoundsTheSame() {
         Recipe r = shortPiece(Style.CHIPTUNE);
         Song song = new Composer().compose(r, false);

@@ -53,9 +53,10 @@ public final class MidiWriter {
 
         Track[] tracks = new Track[Song.CHANNELS];
         for (int ch = 0; ch < Song.CHANNELS; ch++) {
+            Part part = Song.part(ch);
+            if (!r.plays(part) && part.extra()) continue;
             Track t = seq.createTrack();
             tracks[ch] = t;
-            Part part = Song.part(ch);
             int mc = channel(ch);
             t.add(event(meta(TRACK_NAME, part.tonal() ? r.voice(part).instrument().id() + " (" + part.id() + ")"
                     : "drums " + ch), 0));
@@ -84,7 +85,8 @@ public final class MidiWriter {
         return seq;
     }
 
-    /** The MIDI channel (0-based) of a song channel: drums on channel 10, then bass, three chord voices, melody. */
+    /** The MIDI channel (0-based) of a song channel: drums on channel 10, then bass, three chord voices, melody,
+     * two pad voices and the arpeggio. */
     static int channel(int songChannel) {
         return songChannel <= Song.HATS ? DRUM_CHANNEL : songChannel - Song.BASS;
     }

@@ -6,7 +6,7 @@ import eu.amadeos.apps.musicstudio.domain.Recipe;
 import java.util.List;
 
 /**
- * A composed piece: its notes on eight channels, its form and its chords. One bar has four beats of four
+ * A composed piece: its notes on eleven channels, its form and its chords. One bar has four beats of four
  * sixteenths each.
  */
 public record Song(Recipe recipe, boolean loop, List<Note> notes, List<Section> sections, int bars, int keyNote,
@@ -18,7 +18,12 @@ public record Song(Recipe recipe, boolean loop, List<Note> notes, List<Section> 
     /** The three chord voices are channels 4, 5 and 6. */
     public static final int CHORD = 4;
     public static final int LEAD = 7;
-    public static final int CHANNELS = 8;
+    /** The two pad voices are channels 8 and 9. */
+    public static final int PAD = 8;
+    public static final int ARPEGGIO = 10;
+    public static final int CHANNELS = 11;
+    /** The channels of a piece without pad and arpeggio. */
+    public static final int CLASSIC_CHANNELS = 8;
     public static final int STEPS_PER_BAR = 16;
 
     public Song {
@@ -31,6 +36,8 @@ public record Song(Recipe recipe, boolean loop, List<Note> notes, List<Section> 
         if (channel <= HATS) return Part.DRUMS;
         if (channel == BASS) return Part.BASS;
         if (channel == LEAD) return Part.MELODY;
+        if (channel == ARPEGGIO) return Part.ARPEGGIO;
+        if (channel >= PAD) return Part.PAD;
         return Part.CHORDS;
     }
 

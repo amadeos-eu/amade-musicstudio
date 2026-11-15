@@ -18,6 +18,10 @@ public record Note(double step, double length, int channel, int pitch, double ve
         return drum != null;
     }
 
+    Note withLength(double newLength) {
+        return new Note(step, newLength, channel, pitch, velocity, instrument, drum);
+    }
+
     Note transposed(int semitones) {
         return new Note(step, length, channel, pitch + semitones, velocity, instrument, drum);
     }
