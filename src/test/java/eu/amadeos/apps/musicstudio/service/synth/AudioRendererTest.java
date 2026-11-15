@@ -11,6 +11,8 @@ import eu.amadeos.apps.musicstudio.service.compose.Drum;
 import eu.amadeos.apps.musicstudio.service.compose.Song;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import java.util.EnumSet;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
@@ -195,6 +197,41 @@ class AudioRendererTest {
                 "the amplifier holds the note: " + drivenLeft + " against " + cleanLeft);
         float[] muted = synth.note(Instrument.DISTORTED_GUITAR, 40, 0.9, 0.08, Tone.NEUTRAL, 44_100, 1);
         assertTrue(muted.length < 44_100 / 2, "a short note is cut off: " + muted.length);
+    }
+
+    @Test
+    void thePluckedStringsAreInTune() {
+        Synth synth = new Synth();
+        int sr = 44_100;
+        for (Instrument in : List.of(Instrument.GUITAR, Instrument.HARP, Instrument.ELECTRIC_GUITAR,
+                Instrument.DISTORTED_GUITAR, Instrument.ELECTRIC_BASS, Instrument.UPRIGHT_BASS)) {
+            for (int pitch : new int[]{40, 52, 64, 69, 76, 81, 84, 88}) {
+                float[] x = synth.note(in, pitch, 0.8, 1.5, Tone.NEUTRAL, sr, 1);
+                double cents = centsOff(x, Dsp.hz(pitch), sr);
+                assertEquals(0, cents, 5, in + " at " + pitch + " is off by " + cents + " cents");
+            }
+        }
+    }
+
+    /** How far a note is from its pitch, from the lag at which eight periods match themselves best. */
+    private static double centsOff(float[] x, double f, double sr) {
+        int from = (int) (0.15 * sr);
+        int n = (int) (0.4 * sr);
+        double period = sr / f;
+        double best = Double.NEGATIVE_INFINITY;
+        double bestLag = period;
+        for (double lag = period * 0.95; lag <= period * 1.05; lag += 0.02) {
+            double far = lag * 8;
+            int whole = (int) far;
+            double frac = far - whole;
+            double sum = 0;
+            for (int i = from; i < from + n; i++) sum += x[i] * (x[i + whole] * (1 - frac) + x[i + whole + 1] * frac);
+            if (sum > best) {
+                best = sum;
+                bestLag = lag;
+            }
+        }
+        return 1200 * Math.log(period / bestLag) / Math.log(2);
     }
 
     @Test

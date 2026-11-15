@@ -244,8 +244,11 @@ public final class Synth {
 
     private static void plucked(float[] out, Instrument in, double f, double velocity, double held, double rel,
                                 double sr, Random noise) {
-        double period = sr / f;
-        int length = (int) period + 2;
+        // The loop is as long as one period: the delay line, and half a sample for the averaging below.
+        double delay = sr / f - 0.5;
+        int whole = (int) delay;
+        double frac = delay - whole;
+        int length = whole + 2;
         double[] line = new double[length];
         boolean bass = in == Instrument.ELECTRIC_BASS || in == Instrument.UPRIGHT_BASS;
         Filter excite = new Filter().set(in == Instrument.ELECTRIC_BASS ? 900 : in == Instrument.UPRIGHT_BASS ? 600
@@ -258,13 +261,12 @@ public final class Synth {
             case UPRIGHT_BASS -> 0.9955;
             default -> 0.994;
         };
-        double frac = period - Math.floor(period);
         int write = 0;
         double last = 0;
         for (int i = 0; i < out.length; i++) {
             int r1 = (write + 1) % length;
             int r2 = (write + 2) % length;
-            double y = line[r1] * (1 - frac) + line[r2] * frac;
+            double y = line[r2] * (1 - frac) + line[r1] * frac;
             double next = feedback * 0.5 * (y + last);
             last = y;
             line[write] = next;
@@ -288,28 +290,41 @@ public final class Synth {
      */
     private static void distorted(float[] out, double f, double velocity, double held, double rel, double sr,
                                   Random noise) {
-        double period = sr / f;
-        int length = (int) period + 2;
+        double delay = sr / f - 0.5;
+        int whole = (int) delay;
+        double frac = delay - whole;
+        int length = whole + 2;
         double[] line = new double[length];
         Filter excite = new Filter().set(1800 + 1500 * velocity, 0.7, sr);
         for (int i = 0; i < length; i++) line[i] = excite.process(noise.nextDouble() * 2 - 1) * 1.6;
-        double frac = period - Math.floor(period);
         double drive = 6 + 14 * velocity;
         Filter low = new Filter().set(110, 0.7, sr);
         Filter cabinet = new Filter().set(3600, 1.2, sr);
         Filter air = new Filter().set(5200, 0.7, sr);
+        Filter smooth = new Filter().set(9000, 0.6, sr * 4);
+        Filter fine = new Filter().set(9000, 0.6, sr * 4);
+        double before = 0;
         int write = 0;
         double last = 0;
         for (int i = 0; i < out.length; i++) {
             int r1 = (write + 1) % length;
             int r2 = (write + 2) % length;
-            double y = line[r1] * (1 - frac) + line[r2] * frac;
+            double y = line[r2] * (1 - frac) + line[r1] * frac;
             line[write] = 0.9988 * 0.5 * (y + last);
             last = y;
             write = r1;
             low.process(y);
-            double v = Math.tanh(drive * low.high);
-            v = Math.tanh(1.5 * v + 0.3 * v * v); // a second stage, a little uneven like a valve
+            // The limit adds overtones far above what the sample rate can hold; calculated four times as
+            // finely and filtered, they do not fold back as false notes.
+            double in = low.high;
+            double v = 0;
+            for (int k = 1; k <= 4; k++) {
+                double x = before + (in - before) * k / 4.0;
+                double d = Math.tanh(drive * x);
+                d = Math.tanh(1.5 * d + 0.3 * d * d); // a second stage, a little uneven like a valve
+                v = fine.process(smooth.process(d));
+            }
+            before = in;
             out[i] = (float) (0.42 * air.process(cabinet.process(v)) * Math.exp(-i / sr / 4.5));
         }
         damp(out, held, 0.1 * rel / tail(Instrument.DISTORTED_GUITAR), sr);
