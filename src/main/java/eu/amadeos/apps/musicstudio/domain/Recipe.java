@@ -11,7 +11,8 @@ import java.util.function.Consumer;
  * Everything a piece depends on. The same recipe gives the same piece on every computer.
  *
  * <p>Each part has a seed of its own. They all start equal to {@link #seed()}; a new piece keeps the seeds of
- * the parts marked "keep" and gives the others the new seed. The key comes from the chords' seed, unless
+ * the parts marked "keep" and gives the others the new seed. Pad and arpeggio are extras that a piece can do
+ * without; a recipe written before they existed has them as its style has them. The key comes from the chords' seed, unless
  * {@link #key()} fixes it.
  *
  * @param key           -1 for the key the chords' seed gives, else 0 (C) to 11 (B)
@@ -26,11 +27,14 @@ import java.util.function.Consumer;
  * @param reverb        0 (dry) to 100 (hall)
  * @param crackle       0 (clean) to 100: noise and clicks like an old record
  * @param drumVolume    0 to 100
+ * @param padOn         whether the pad plays
+ * @param arpeggioOn    whether the arpeggio plays
  */
 public record Recipe(Style style, long seed, long melodySeed, long chordSeed, long bassSeed, long drumSeed, int key,
                      int bpm, int lengthSeconds, int hardness, int swing, int energy, int fills, int variety,
                      int brightness, int reverb, int crackle, Voice melody, Voice chords, Voice bass, Kit kit,
-                     int drumVolume) {
+                     int drumVolume, long padSeed, long arpeggioSeed, Voice pad, Voice arpeggio, boolean padOn,
+                     boolean arpeggioOn) {
     public static final int MIN = 0;
     public static final int MAX = 100;
     public static final int MIN_BPM = 40;
@@ -45,6 +49,8 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
     public static final String HEADER = "# amadeOS Music Studio recipe";
     /** The largest seed; seeds are typed in, so they stay short. */
     public static final long MAX_SEED = 999_999_999L;
+    /** Before the voice of a pad or an arpeggio that does not play: {@code pad=off strings,0,50,50,60}. */
+    static final String OFF = "off";
 
     public Recipe {
         Objects.requireNonNull(style, "style");
@@ -52,7 +58,9 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
         Objects.requireNonNull(chords, "chords");
         Objects.requireNonNull(bass, "bass");
         Objects.requireNonNull(kit, "kit");
-        for (long s : new long[]{seed, melodySeed, chordSeed, bassSeed, drumSeed}) {
+        Objects.requireNonNull(pad, "pad");
+        Objects.requireNonNull(arpeggio, "arpeggio");
+        for (long s : new long[]{seed, melodySeed, chordSeed, bassSeed, drumSeed, padSeed, arpeggioSeed}) {
             if (s < 0 || s > MAX_SEED) throw new IllegalArgumentException("Seed out of range: " + s);
         }
         key = key < 0 ? -1 : Math.min(11, key);
@@ -78,8 +86,9 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
         return new Recipe(style, seed, seed, seed, seed, seed, -1, style.bpm(), DEFAULT_LENGTH,
                 style.defaultHardness(), style.defaultSwing(), style.defaultEnergy(), DEFAULT_FILLS,
                 style.defaultVariety(), style.defaultBrightness(), style.defaultReverb(), style.defaultCrackle(),
-                Voice.of(style.defaultInstrument(Part.MELODY)), Voice.of(style.defaultInstrument(Part.CHORDS)),
-                Voice.of(style.defaultInstrument(Part.BASS)), style.defaultKit(), Voice.DEFAULT_VOLUME);
+                style.defaultVoice(Part.MELODY), style.defaultVoice(Part.CHORDS), style.defaultVoice(Part.BASS),
+                style.defaultKit(), Voice.DEFAULT_VOLUME, seed, seed, style.defaultVoice(Part.PAD),
+                style.defaultVoice(Part.ARPEGGIO), style.defaultPlays(Part.PAD), style.defaultPlays(Part.ARPEGGIO));
     }
 
     /** The seed of a part. */
@@ -89,6 +98,8 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
             case CHORDS -> chordSeed;
             case BASS -> bassSeed;
             case DRUMS -> drumSeed;
+            case PAD -> padSeed;
+            case ARPEGGIO -> arpeggioSeed;
         };
     }
 
@@ -98,8 +109,31 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
             case MELODY -> melody;
             case CHORDS -> chords;
             case BASS -> bass;
+            case PAD -> pad;
+            case ARPEGGIO -> arpeggio;
             case DRUMS -> throw new IllegalArgumentException("The drums have a kit, not a voice");
         };
+    }
+
+    /** Whether the part plays at all: the drums need a kit, pad and arpeggio can be switched off. */
+    public boolean plays(Part part) {
+        return switch (part) {
+            case DRUMS -> kit != Kit.NONE;
+            case PAD -> padOn;
+            case ARPEGGIO -> arpeggioOn;
+            default -> true;
+        };
+    }
+
+    /** Switches the pad or the arpeggio on or off. */
+    public Recipe withPlaying(Part part, boolean on) {
+        return with(b -> {
+            switch (part) {
+                case PAD -> b.padOn = on;
+                case ARPEGGIO -> b.arpeggioOn = on;
+                default -> throw new IllegalArgumentException("Only pad and arpeggio can be switched off: " + part);
+            }
+        });
     }
 
     /** The volume of a part, 0 to 100. */
@@ -109,7 +143,8 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
 
     /** Whether all parts use the main seed. */
     public boolean oneSeed() {
-        return melodySeed == seed && chordSeed == seed && bassSeed == seed && drumSeed == seed;
+        for (Part p : Part.values()) if (seed(p) != seed) return false;
+        return true;
     }
 
     /** Another style with its tempo, sliders and instruments; the seeds and the length stay. */
@@ -120,6 +155,8 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
             b.chordSeed = chordSeed;
             b.bassSeed = bassSeed;
             b.drumSeed = drumSeed;
+            b.padSeed = padSeed;
+            b.arpeggioSeed = arpeggioSeed;
             b.lengthSeconds = lengthSeconds;
             b.key = key;
         });
@@ -133,6 +170,8 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
             b.chordSeed = s;
             b.bassSeed = s;
             b.drumSeed = s;
+            b.padSeed = s;
+            b.arpeggioSeed = s;
         });
     }
 
@@ -144,6 +183,8 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
             if (!kept.contains(Part.CHORDS)) b.chordSeed = s;
             if (!kept.contains(Part.BASS)) b.bassSeed = s;
             if (!kept.contains(Part.DRUMS)) b.drumSeed = s;
+            if (!kept.contains(Part.PAD)) b.padSeed = s;
+            if (!kept.contains(Part.ARPEGGIO)) b.arpeggioSeed = s;
         });
     }
 
@@ -155,6 +196,8 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
                 case CHORDS -> b.chordSeed = s;
                 case BASS -> b.bassSeed = s;
                 case DRUMS -> b.drumSeed = s;
+                case PAD -> b.padSeed = s;
+                case ARPEGGIO -> b.arpeggioSeed = s;
             }
         });
     }
@@ -165,6 +208,8 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
                 case MELODY -> b.melody = voice;
                 case CHORDS -> b.chords = voice;
                 case BASS -> b.bass = voice;
+                case PAD -> b.pad = voice;
+                case ARPEGGIO -> b.arpeggio = voice;
                 case DRUMS -> throw new IllegalArgumentException("The drums have a kit, not a voice");
             }
         });
@@ -206,6 +251,12 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
         public Voice bass;
         public Kit kit;
         public int drumVolume;
+        public long padSeed;
+        public long arpeggioSeed;
+        public Voice pad;
+        public Voice arpeggio;
+        public boolean padOn;
+        public boolean arpeggioOn;
 
         Builder(Recipe r) {
             style = r.style;
@@ -230,12 +281,18 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
             bass = r.bass;
             kit = r.kit;
             drumVolume = r.drumVolume;
+            padSeed = r.padSeed;
+            arpeggioSeed = r.arpeggioSeed;
+            pad = r.pad;
+            arpeggio = r.arpeggio;
+            padOn = r.padOn;
+            arpeggioOn = r.arpeggioOn;
         }
 
         Recipe build() {
             return new Recipe(style, seed, melodySeed, chordSeed, bassSeed, drumSeed, key, bpm, lengthSeconds,
                     hardness, swing, energy, fills, variety, brightness, reverb, crackle, melody, chords, bass,
-                    kit, drumVolume);
+                    kit, drumVolume, padSeed, arpeggioSeed, pad, arpeggio, padOn, arpeggioOn);
         }
     }
 
@@ -282,6 +339,8 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
         v.put("chords", chords.toText());
         v.put("bass", bass.toText());
         v.put("drums", kit.id() + "," + drumVolume);
+        v.put("pad", (padOn ? "" : OFF + " ") + pad.toText());
+        v.put("arpeggio", (arpeggioOn ? "" : OFF + " ") + arpeggio.toText());
         return v;
     }
 
@@ -315,7 +374,21 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
                 number(v.get("energy"), d.energy), number(v.get("fills"), d.fills), number(v.get("variety"), d.variety),
                 number(v.get("brightness"), d.brightness), number(v.get("reverb"), d.reverb),
                 number(v.get("crackle"), d.crackle), Voice.parse(v.get("melody"), d.melody),
-                Voice.parse(v.get("chords"), d.chords), Voice.parse(v.get("bass"), d.bass), kit, drumVolume);
+                Voice.parse(v.get("chords"), d.chords), Voice.parse(v.get("bass"), d.bass), kit, drumVolume,
+                partSeed(v, Part.PAD, seed), partSeed(v, Part.ARPEGGIO, seed), Voice.parse(extra(v.get("pad")), d.pad),
+                Voice.parse(extra(v.get("arpeggio")), d.arpeggio), on(v.get("pad"), d.padOn),
+                on(v.get("arpeggio"), d.arpeggioOn));
+    }
+
+    /** The voice of a pad or an arpeggio without the word that switches it off. */
+    private static String extra(String text) {
+        if (text == null) return null;
+        String t = text.strip();
+        return t.startsWith(OFF) ? t.substring(OFF.length()).strip() : t;
+    }
+
+    private static boolean on(String text, boolean fallback) {
+        return text == null ? fallback : !text.strip().startsWith(OFF);
     }
 
     private static long partSeed(Map<String, String> v, Part part, long fallback) {

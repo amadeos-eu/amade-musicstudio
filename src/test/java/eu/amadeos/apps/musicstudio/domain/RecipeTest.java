@@ -109,6 +109,53 @@ class RecipeTest {
     }
 
     @Test
+    void padAndArpeggioAreExtras() {
+        Recipe lofi = Recipe.of(Style.LOFI, 1);
+        assertTrue(lofi.plays(Part.PAD));
+        assertFalse(lofi.plays(Part.ARPEGGIO));
+        assertTrue(lofi.plays(Part.MELODY) && lofi.plays(Part.DRUMS));
+        assertFalse(Recipe.of(Style.PIANO, 1).plays(Part.DRUMS), "no kit, no drums");
+        assertThrows(IllegalArgumentException.class, () -> lofi.withPlaying(Part.BASS, false));
+        Recipe r = lofi.withPlaying(Part.PAD, false).withPlaying(Part.ARPEGGIO, true)
+                .withVoice(Part.PAD, Voice.of(Instrument.CHOIR_AAH).withVolume(40).withSweep(80, 0))
+                .withVoice(Part.ARPEGGIO, Voice.of(Instrument.HARP).withOctave(1).withTremolo(35, 6))
+                .withPartSeed(Part.ARPEGGIO, 55);
+        assertEquals(r, Recipe.parse(r.toText()));
+        assertEquals(r, Recipe.parse(r.toLine()));
+        assertTrue(r.toLine().contains("pad=off choir-aah,0,50,50,40,80,0,0,5"), r.toLine());
+        assertTrue(r.toLine().contains("arpeggio=harp,1,50,50,75,0,1,35,6"), r.toLine());
+        assertTrue(r.toLine().contains("seed.arpeggio=55"), r.toLine());
+        assertTrue(lofi.toLine().contains("melody=flute,0,50,50,75;"), "a voice that does not move stays short");
+        Recipe next = r.newPiece(9, EnumSet.of(Part.ARPEGGIO));
+        assertEquals(55, next.arpeggioSeed());
+        assertEquals(9, next.padSeed());
+        assertEquals(55, r.withStyle(Style.ELECTRO).arpeggioSeed());
+    }
+
+    @Test
+    void aRecipeFromBeforePadAndArpeggioHasThemAsItsStyle() {
+        Recipe old = Recipe.parse("style=electro; seed=7; melody=flute,0,50,50,75; drums=electronic,75");
+        assertEquals(Recipe.of(Style.ELECTRO, 7).pad(), old.pad());
+        assertTrue(old.plays(Part.PAD) && old.plays(Part.ARPEGGIO));
+        assertEquals(0, old.melody().sweep());
+        assertEquals(Voice.DEFAULT_TREMOLO_RATE, old.melody().tremoloRate());
+        assertFalse(Recipe.parse("style=electro; seed=7; pad=off").plays(Part.PAD));
+        assertEquals(Recipe.of(Style.ELECTRO, 7).pad(), Recipe.parse("style=electro; seed=7; pad=off").pad());
+    }
+
+    @Test
+    void movementsOfAVoiceStayInTheirRange() {
+        Voice v = Voice.of(Instrument.STRINGS).withSweep(300, 99).withTremolo(-4, -1);
+        assertEquals(100, v.sweep());
+        assertEquals(Voice.RATES.size() - 1, v.sweepRate());
+        assertEquals(0, v.tremolo());
+        assertEquals(0, v.tremoloRate());
+        assertEquals(128, v.tremoloSteps());
+        assertEquals(2, v.sweepSteps());
+        assertEquals("movement.rate.16", Voice.rateKey(3));
+    }
+
+    @Test
     void theDrumsHaveAKitNotAVoice() {
         Recipe r = Recipe.of(Style.LOFI, 1);
         assertThrows(IllegalArgumentException.class, () -> r.voice(Part.DRUMS));

@@ -14,6 +14,7 @@ import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
@@ -66,6 +67,10 @@ final class InstrumentDialog extends JDialog {
     private final JSlider attack = new JSlider(0, 100, 50);
     private final JSlider release = new JSlider(0, 100, 50);
     private final JSlider octave = new JSlider(-2, 2, 0);
+    private final JSlider sweep = new JSlider(0, 100, 0);
+    private final JSlider tremolo = new JSlider(0, 100, 0);
+    private final JComboBox<String> sweepRate = new JComboBox<>();
+    private final JComboBox<String> tremoloRate = new JComboBox<>();
     private final Voice start;
     private Voice chosen;
     private int row = 100;
@@ -157,6 +162,39 @@ final class InstrumentDialog extends JDialog {
         sliderRow(right, "dialog.instrument.release", release, "dialog.instrument.release.low",
                 "dialog.instrument.release.high");
         sliderRow(right, "dialog.instrument.octave", octave, null, null);
+        JLabel movement = new JLabel(msg.get("dialog.instrument.movement"));
+        movement.setFont(movement.getFont().deriveFont(Font.BOLD));
+        c = new GridBagConstraints();
+        c.gridx = 0;
+        c.gridy = ++row;
+        c.gridwidth = 3;
+        c.anchor = GridBagConstraints.WEST;
+        c.insets = new Insets(10, 0, 4, 0);
+        right.add(movement, c);
+        sweep.setName("instrument.sweep");
+        tremolo.setName("instrument.tremolo");
+        sweepRate.setName("instrument.sweep.rate");
+        tremoloRate.setName("instrument.tremolo.rate");
+        for (int rate = 0; rate < Voice.RATES.size(); rate++) {
+            sweepRate.addItem(msg.get(Voice.rateKey(rate)));
+            tremoloRate.addItem(msg.get(Voice.rateKey(rate)));
+        }
+        sliderRow(right, "dialog.instrument.sweep", sweep, "dialog.instrument.sweep.low", "dialog.instrument.sweep.high");
+        fieldRow(right, "dialog.instrument.sweep.rate", sweepRate);
+        sliderRow(right, "dialog.instrument.tremolo", tremolo, "dialog.instrument.tremolo.low",
+                "dialog.instrument.tremolo.high");
+        fieldRow(right, "dialog.instrument.tremolo.rate", tremoloRate);
+        JLabel movementNote = new JLabel("<html><div style='width:360px'>" + msg.get("dialog.instrument.movement.note")
+                + "</div></html>");
+        movementNote.setForeground(UIManager.getColor("Label.disabledForeground"));
+        movementNote.setFont(movementNote.getFont().deriveFont(movementNote.getFont().getSize2D() - 1));
+        c = new GridBagConstraints();
+        c.gridx = 0;
+        c.gridy = ++row;
+        c.gridwidth = 3;
+        c.anchor = GridBagConstraints.WEST;
+        c.insets = new Insets(6, 0, 0, 0);
+        right.add(movementNote, c);
         c = new GridBagConstraints();
         c.gridx = 0;
         c.gridy = ++row;
@@ -191,6 +229,10 @@ final class InstrumentDialog extends JDialog {
         attack.setValue(current.attack());
         release.setValue(current.release());
         octave.setValue(current.octave());
+        sweep.setValue(current.sweep());
+        tremolo.setValue(current.tremolo());
+        sweepRate.setSelectedIndex(current.sweepRate());
+        tremoloRate.setSelectedIndex(current.tremoloRate());
         list.setSelectedValue(current.instrument(), true);
         showInstrument();
         wave.setAudio(preview.sound(voice(), part == Part.BASS ? 36 : 60));
@@ -207,7 +249,8 @@ final class InstrumentDialog extends JDialog {
     /** The voice as set now; the volume stays. */
     Voice voice() {
         Instrument in = list.getSelectedValue() != null ? list.getSelectedValue() : start.instrument();
-        return new Voice(in, octave.getValue(), attack.getValue(), release.getValue(), start.volume());
+        return new Voice(in, octave.getValue(), attack.getValue(), release.getValue(), start.volume(), sweep.getValue(),
+                Math.max(0, sweepRate.getSelectedIndex()), tremolo.getValue(), Math.max(0, tremoloRate.getSelectedIndex()));
     }
 
     JList<Instrument> instruments() {
@@ -256,6 +299,21 @@ final class InstrumentDialog extends JDialog {
             c.insets = new Insets(0, 4, 2, 4);
             panel.add(scale, c);
         }
+    }
+
+    private void fieldRow(JPanel panel, String key, JComponent field) {
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = 0;
+        c.gridy = ++row;
+        c.anchor = GridBagConstraints.WEST;
+        c.insets = new Insets(2, 0, 4, 8);
+        JLabel label = new JLabel(msg.get(key));
+        label.setLabelFor(field);
+        panel.add(label, c);
+        c.gridx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.weightx = 1;
+        panel.add(field, c);
     }
 
     private static JLabel small(String text) {

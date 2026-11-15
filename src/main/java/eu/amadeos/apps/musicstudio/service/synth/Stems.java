@@ -7,7 +7,7 @@ import java.util.EnumMap;
 import java.util.Map;
 
 /**
- * The four parts of a rendered piece, each in stereo with its share for the hall, before the mixer. Changing
+ * The parts of a rendered piece, each in stereo with its share for the hall, before the mixer. Changing
  * a volume or muting a part only mixes them anew; nothing is calculated again.
  *
  * @param gain the factor that brings the dry mix of all parts at their usual volume near full level

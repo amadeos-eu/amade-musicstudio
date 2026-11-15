@@ -91,7 +91,7 @@ public final class MainWindow extends JFrame implements MainView {
         ticker = new Timer(TICK, e -> {
             if (presenter != null) presenter.tick();
         });
-        setPreferredSize(new Dimension(1300, 760));
+        setPreferredSize(new Dimension(1300, 800));
         pack();
         setLocationRelativeTo(null);
     }

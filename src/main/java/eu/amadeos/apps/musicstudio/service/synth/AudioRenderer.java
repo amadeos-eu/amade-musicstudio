@@ -22,8 +22,8 @@ import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
 
 /**
- * Plays a song with the synthesizer: each of the eight channels is rendered on its own, filtered (the drums
- * by the hardness, melody and chords by the brightness) and placed left or right; then {@link #mix} adds the
+ * Plays a song with the synthesizer: each of the channels is rendered on its own, filtered (the drums by the
+ * hardness, the others but the bass by the brightness), moved by its voice's sweep and tremolo and placed left or right; then {@link #mix} adds the
  * parts at their volumes, the hall and the record crackle.
  */
 public final class AudioRenderer {
@@ -33,9 +33,9 @@ public final class AudioRenderer {
     /** The highest level after mixing; the rest is headroom. */
     static final double LEVEL = 0.89;
 
-    static final double[] CHANNEL_GAIN = {0.9, 0.6, 0.85, 0.75, 0.3, 0.3, 0.3, 0.42};
-    static final double[] CHANNEL_PAN = {0, 0.08, 0.3, 0, -0.4, 0, 0.4, 0.12};
-    static final double[] CHANNEL_REVERB = {0.03, 0.18, 0.12, 0.0, 0.5, 0.5, 0.5, 0.4};
+    static final double[] CHANNEL_GAIN = {0.9, 0.6, 0.85, 0.75, 0.3, 0.3, 0.3, 0.42, 0.26, 0.26, 0.32};
+    static final double[] CHANNEL_PAN = {0, 0.08, 0.3, 0, -0.4, 0, 0.4, 0.12, -0.6, 0.6, -0.22};
+    static final double[] CHANNEL_REVERB = {0.03, 0.18, 0.12, 0.0, 0.5, 0.5, 0.5, 0.4, 0.6, 0.6, 0.45};
 
     private final Synth synth = new Synth();
 
@@ -157,8 +157,8 @@ public final class AudioRenderer {
         Tone tone = part.tonal() ? Tone.of(r.voice(part)) : Tone.NEUTRAL;
         int index = 0;
         for (Note n : song.notes()) {
-            index++;
             if (n.channel() != channel) continue;
+            index++; // counted per channel, so that the noise of a note does not depend on the other parts
             if (cancelled.getAsBoolean()) throw new CancellationException();
             int start = (int) Math.round(song.heardAt(n) * stepSeconds * SAMPLE_RATE);
             if (start >= frames) continue;
@@ -174,9 +174,44 @@ public final class AudioRenderer {
         if (part == Part.DRUMS) {
             Dsp.lowPass(out, drumCutoff(r.hardness()), 0.707, SAMPLE_RATE);
         } else if (part != Part.BASS) {
-            Dsp.lowPass(out, 900 * Math.pow(2, r.brightness() / 100.0 * 4.2), 0.6, SAMPLE_RATE);
+            Dsp.lowPass(out, brightCutoff(r.brightness()), 0.6, SAMPLE_RATE);
+        }
+        if (part.tonal()) {
+            move(out, r.voice(part), stepSeconds, part == Part.BASS ? 5000 : Math.min(12_000, brightCutoff(r.brightness())),
+                    SAMPLE_RATE);
         }
         return out;
+    }
+
+    /** The filter on melody, chords, pad and arpeggio: warm when low, open when high. */
+    static double brightCutoff(int brightness) {
+        return 900 * Math.pow(2, brightness / 100.0 * 4.2);
+    }
+
+    /**
+     * The movements of a voice in time with the piece. The sweep is a low-pass filter that starts open at
+     * {@code open} Hz, closes by up to four and a half octaves and opens again; the tremolo lets the volume
+     * sink and rise again. Both start with the piece, so they fall on the same notes every time.
+     */
+    static void move(float[] x, Voice voice, double stepSeconds, double open, int sampleRate) {
+        if (voice.sweep() == 0 && voice.tremolo() == 0) return;
+        double sweepFrames = voice.sweepSteps() * stepSeconds * sampleRate;
+        double tremoloFrames = voice.tremoloSteps() * stepSeconds * sampleRate;
+        double octaves = voice.sweep() / 100.0 * 4.5;
+        double depth = voice.tremolo() / 100.0 * 0.9;
+        Dsp.Filter filter = new Dsp.Filter();
+        double gain = 1;
+        double target = 1;
+        for (int i = 0; i < x.length; i++) {
+            if (i % 32 == 0) {
+                double closed = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / sweepFrames);
+                filter.set(open * Math.pow(2, -octaves * closed), 1.1, sampleRate);
+                target = 1 - depth * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / tremoloFrames));
+            }
+            gain += (target - gain) * 0.01;
+            double v = voice.sweep() > 0 ? filter.process(x[i]) : x[i];
+            x[i] = (float) (v * gain);
+        }
     }
 
     /** The drums' filter: almost closed when dull, open when hard. */
@@ -184,7 +219,7 @@ public final class AudioRenderer {
         return 700 * Math.pow(2, hardness / 100.0 * 4.8);
     }
 
-    /** All four parts. */
+    /** All parts. */
     public Audio mix(Stems stems, Recipe r) {
         return mix(stems, r, EnumSet.allOf(Part.class));
     }
@@ -274,7 +309,7 @@ public final class AudioRenderer {
         Voice voice = r.voice(part);
         float[] out = synth.note(voice.instrument(), pitch, 0.85, held, Tone.of(voice), sampleRate,
                 99 + voice.instrument().ordinal());
-        if (part != Part.BASS) Dsp.lowPass(out, 900 * Math.pow(2, r.brightness() / 100.0 * 4.2), 0.6, sampleRate);
+        if (part != Part.BASS) Dsp.lowPass(out, brightCutoff(r.brightness()), 0.6, sampleRate);
         return out;
     }
 

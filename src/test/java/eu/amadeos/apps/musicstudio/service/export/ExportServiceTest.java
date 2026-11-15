@@ -76,7 +76,8 @@ class ExportServiceTest {
         Path target = dir.resolve("chip.wav");
         List<Path> written = service(new FakeGst()).export(recipe,
                 new ExportOptions(ExportFormat.WAV, false, true, true), target, () -> false);
-        assertEquals(1 + Part.values().length, written.size());
+        long parts = java.util.Arrays.stream(Part.values()).filter(p -> !p.extra() || recipe.plays(p)).count();
+        assertEquals(1 + parts, written.size(), "a pad or an arpeggio that does not play gets no file");
         assertEquals(target, written.getFirst());
         for (Path p : written) {
             assertTrue(Files.size(p) > 44, p.toString());

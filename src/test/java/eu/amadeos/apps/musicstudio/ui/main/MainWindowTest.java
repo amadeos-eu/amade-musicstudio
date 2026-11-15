@@ -81,7 +81,22 @@ class MainWindowTest {
                 tracks.head(Part.MELODY).sound.setSelectedItem(Instrument.BELLS);
                 assertEquals(Instrument.BELLS, presenter.recipe().voice(Part.MELODY).instrument());
                 tracks.head(Part.DRUMS).mute.doClick();
-                assertEquals(java.util.EnumSet.of(Part.MELODY, Part.CHORDS, Part.BASS), presenter.audible());
+                assertEquals(java.util.EnumSet.complementOf(java.util.EnumSet.of(Part.DRUMS)), presenter.audible());
+                // Pad and arpeggio have "Off" as the first entry of their list.
+                presenter.setPlaying(Part.ARPEGGIO, false);
+                presenter.setInstrument(Part.PAD, Instrument.WARM_PAD);
+                executor.runAll();
+                assertEquals(TrackPanel.OFF, tracks.head(Part.ARPEGGIO).sound.getSelectedItem());
+                assertEquals(Instrument.WARM_PAD, tracks.head(Part.PAD).sound.getSelectedItem());
+                tracks.head(Part.PAD).sound.setSelectedIndex(0);
+                executor.runAll();
+                assertFalse(presenter.recipe().plays(Part.PAD));
+                tracks.head(Part.ARPEGGIO).sound.setSelectedItem(Instrument.HARP);
+                executor.runAll();
+                assertTrue(presenter.recipe().plays(Part.ARPEGGIO));
+                assertEquals(Instrument.HARP, presenter.recipe().voice(Part.ARPEGGIO).instrument());
+                assertEquals(Instrument.values().length, tracks.head(Part.MELODY).sound.getItemCount(),
+                        "the melody cannot be switched off");
                 tracks.head(Part.BASS).keep.doClick();
                 assertEquals(java.util.Set.of(Part.BASS), presenter.kept());
                 executor.runAll();

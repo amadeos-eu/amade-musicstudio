@@ -22,14 +22,14 @@ class ComposerTest {
     @ParameterizedTest
     @EnumSource(Style.class)
     void everyStyleGivesAPieceWithAllItsParts(Style style) {
-        Song song = composer.compose(Recipe.of(style, 4711), false);
+        Recipe recipe = Recipe.of(style, 4711);
+        Song song = composer.compose(recipe, false);
         assertFalse(song.notes().isEmpty());
         assertEquals(Section.Kind.INTRO, song.sections().getFirst().kind());
         assertEquals(Section.Kind.OUTRO, song.sections().getLast().kind());
         assertEquals(song.bars(), song.sections().getLast().endBar());
         for (Part p : Part.values()) {
-            if (p == Part.DRUMS && style.defaultKit() == Kit.NONE) continue;
-            assertTrue(song.notes().stream().anyMatch(n -> Song.part(n.channel()) == p), style + " " + p);
+            assertEquals(recipe.plays(p), song.notes().stream().anyMatch(n -> Song.part(n.channel()) == p), style + " " + p);
         }
         for (Note n : song.notes()) {
             assertTrue(n.step() >= 0 && n.step() < song.steps(), "note within the piece: " + n);
@@ -109,7 +109,7 @@ class ComposerTest {
         for (Style style : Style.values()) {
             Song song = composer.compose(long_(style, 4711, 0), false);
             for (Part p : Part.values()) {
-                if (p == Part.DRUMS) continue;
+                if (p == Part.DRUMS || !song.recipe().plays(p)) continue;
                 assertTrue(longestRest(song, p) <= 2, style + " " + p + " rests " + longestRest(song, p) + " bars");
             }
         }
@@ -202,6 +202,75 @@ class ComposerTest {
     void theDrumsDoNotAnswerWithoutAKit() {
         Song song = composer.compose(long_(Style.LOFI, 4711, 100).with(b -> b.kit = Kit.NONE), false);
         assertTrue(notes(song, Part.DRUMS).isEmpty());
+    }
+
+    @Test
+    void thePadHoldsTwoNotesOfEveryChord() {
+        for (Style style : Style.values()) {
+            Recipe r = long_(style, 4711, 0).withPlaying(Part.PAD, true);
+            Song song = composer.compose(r, false);
+            List<Note> pad = notes(song, Part.PAD);
+            assertEquals(0, pad.size() % 2, "two voices");
+            for (Note n : pad) {
+                int bar = (int) (n.step() / Song.STEPS_PER_BAR);
+                assertEquals(0, n.step() % Song.STEPS_PER_BAR, "starts with a bar");
+                assertTrue(n.length() == 16 || n.length() == 32, "one or two bars: " + n);
+                int pc = Math.floorMod(n.pitch() - 12 * r.pad().octave(), 12);
+                assertTrue(java.util.Arrays.stream(song.chordsPerBar()[bar]).anyMatch(c -> c == pc),
+                        style + ": a note of the chord in bar " + bar + ": " + n);
+                assertEquals(r.pad().instrument(), n.instrument());
+            }
+            for (int bar = 0; bar < song.bars(); bar++) {
+                int b = bar;
+                assertTrue(pad.stream().anyMatch(n -> n.step() <= b * 16 && n.step() + n.length() > b * 16),
+                        style + ": the pad sounds in bar " + bar);
+            }
+        }
+    }
+
+    @Test
+    void theArpeggioPlaysTheChordNoteByNote() {
+        for (Style style : Style.values()) {
+            Recipe r = long_(style, 4711, 0).withPlaying(Part.ARPEGGIO, true);
+            Song song = composer.compose(r, false);
+            List<Note> arp = notes(song, Part.ARPEGGIO);
+            assertFalse(arp.isEmpty());
+            double end = 0;
+            java.util.Set<Integer> pitches = new java.util.HashSet<>();
+            for (Note n : arp) {
+                int bar = (int) (n.step() / Song.STEPS_PER_BAR);
+                assertEquals(Song.ARPEGGIO, n.channel());
+                assertTrue(n.step() >= end, "one note at a time: " + n);
+                end = n.step() + n.length();
+                int pc = Math.floorMod(n.pitch(), 12);
+                assertTrue(java.util.Arrays.stream(song.chordsPerBar()[bar]).limit(3).anyMatch(c -> c == pc),
+                        style + ": a note of the chord in bar " + bar + ": " + n);
+                assertTrue(n.pitch() >= 60 && n.pitch() <= 96, n.toString());
+                pitches.add(n.pitch());
+            }
+            assertTrue(pitches.size() >= 8, style + ": the figure moves, " + pitches.size() + " pitches");
+            assertTrue(inBar(song, Part.ARPEGGIO, 0).isEmpty(), "the intro starts without it");
+            assertTrue(inBar(song, Part.ARPEGGIO, song.bars() - 1).isEmpty(), "the outro ends without it");
+        }
+    }
+
+    @Test
+    void padAndArpeggioLeaveTheOtherPartsAsTheyAre() {
+        Recipe r = long_(Style.ELECTRO, 4711, 100);
+        Song with = composer.compose(r, false);
+        Song without = composer.compose(r.withPlaying(Part.PAD, false).withPlaying(Part.ARPEGGIO, false), false);
+        assertFalse(notes(with, Part.PAD).isEmpty());
+        assertFalse(notes(with, Part.ARPEGGIO).isEmpty());
+        assertTrue(notes(without, Part.PAD).isEmpty());
+        assertTrue(notes(without, Part.ARPEGGIO).isEmpty());
+        for (Part p : List.of(Part.MELODY, Part.CHORDS, Part.BASS, Part.DRUMS)) {
+            assertEquals(notes(with, p), notes(without, p), p.toString());
+        }
+        assertTrue(longestRest(with, Part.PAD) >= 4 || longestRest(with, Part.ARPEGGIO) >= 4,
+                "with variety the extras rest too");
+        Song other = composer.compose(r.withPartSeed(Part.ARPEGGIO, 5), false);
+        assertEquals(notes(with, Part.PAD), notes(other, Part.PAD));
+        assertNotEquals(notes(with, Part.ARPEGGIO), notes(other, Part.ARPEGGIO));
     }
 
     @Test

@@ -20,7 +20,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Writes a piece as an eight-channel module ("8CHN"), which tracker programs and many players open. The
+ * Writes a piece as a module, which tracker programs and many players open: with eight channels ("8CHN"), or
+ * with twelve ("12CH") when a pad or an arpeggio plays. Sweep and tremolo of a voice are left out. The
  * synthesizer renders every instrument into one sample: each drum of the kit with its hardness, and each tonal part
  * one note of its instrument, looped with a crossfade when the instrument holds its sound. One row is one
  * sixteenth; {@code Fxx} sets the tempo, {@code Cxx} the loudness of a note, {@code EDx} delays the swung notes and
@@ -38,6 +39,8 @@ public final class ModWriter {
     static final int ROWS = 64;
     static final int MAX_PATTERNS = 128;
     static final int TICKS = 6;
+    /** The channels of a module with pad and arpeggio; the twelfth stays empty, since players expect an even number. */
+    static final int WIDE_CHANNELS = 12;
 
     private final AudioRenderer renderer;
 
@@ -64,6 +67,8 @@ public final class ModWriter {
      */
     public void write(Song song, String comment, OutputStream out) throws IOException {
         Recipe r = song.recipe();
+        boolean extras = song.notes().stream().anyMatch(n -> n.channel() >= Song.CLASSIC_CHANNELS);
+        int channels = extras ? WIDE_CHANNELS : Song.CLASSIC_CHANNELS;
         int rows = ((song.steps() + ROWS - 1) / ROWS) * ROWS;
         if (rows / ROWS > MAX_PATTERNS) throw new IOException("The piece is too long for a module");
 
@@ -89,7 +94,7 @@ public final class ModWriter {
         Set<Long> noteStarts = new HashSet<>();
         for (Note n : song.notes()) noteStarts.add(cellId((int) Math.round(n.step()), n.channel()));
 
-        int[][][] cell = new int[rows][Song.CHANNELS][]; // sample (1-based), note index, effect, parameter
+        int[][][] cell = new int[rows][channels][]; // sample (1-based), note index, effect, parameter
         for (Note n : song.notes()) {
             int row = (int) Math.round(n.step());
             if (row >= rows) continue;
@@ -123,7 +128,7 @@ public final class ModWriter {
         List<byte[]> patterns = new ArrayList<>();
         List<Integer> order = new ArrayList<>();
         for (int p = 0; p < rows / ROWS; p++) {
-            byte[] pattern = pattern(cell, p);
+            byte[] pattern = pattern(cell, p, channels);
             int found = -1;
             for (int q = 0; q < patterns.size() && found < 0; q++) if (Arrays.equals(patterns.get(q), pattern)) found = q;
             if (found < 0) {
@@ -158,7 +163,7 @@ public final class ModWriter {
         o.write(order.size());
         o.write(127);
         for (int i = 0; i < MAX_PATTERNS; i++) o.write(i < order.size() ? order.get(i) : 0);
-        o.write("8CHN".getBytes(StandardCharsets.US_ASCII));
+        o.write((extras ? "12CH" : "8CHN").getBytes(StandardCharsets.US_ASCII));
         for (byte[] p : patterns) o.write(p);
         for (Sample s : list) o.write(s.data);
         o.writeTo(out);
@@ -220,14 +225,14 @@ public final class ModWriter {
     private static void placeControls(Recipe r, int[][][] cell) {
         List<int[]> controls = new ArrayList<>();
         controls.add(new int[]{0xF, Math.max(32, Math.min(255, r.bpm())), -1});
-        for (int ch = 0; ch < Song.CHANNELS; ch++) {
+        for (int ch = 0; ch < Math.min(Song.CHANNELS, cell[0].length); ch++) {
             int pan = (int) Math.round(128 + AudioRenderer.pan(ch) * 160);
             controls.add(new int[]{0x8, Math.max(0, Math.min(255, pan)), ch});
         }
         for (int[] control : controls) {
             boolean placed = false;
             int from = control[2] < 0 ? 0 : control[2];
-            int to = control[2] < 0 ? Song.CHANNELS - 1 : control[2];
+            int to = control[2] < 0 ? cell[0].length - 1 : control[2];
             for (int row = 0; row < Math.min(8, cell.length) && !placed; row++) {
                 for (int ch = from; ch <= to && !placed; ch++) {
                     int[] c = cell[row][ch];
@@ -244,13 +249,13 @@ public final class ModWriter {
         }
     }
 
-    private static byte[] pattern(int[][][] cell, int p) {
-        byte[] pattern = new byte[ROWS * Song.CHANNELS * 4];
+    private static byte[] pattern(int[][][] cell, int p, int channels) {
+        byte[] pattern = new byte[ROWS * channels * 4];
         for (int row = 0; row < ROWS; row++) {
-            for (int ch = 0; ch < Song.CHANNELS; ch++) {
+            for (int ch = 0; ch < channels; ch++) {
                 int[] c = cell[p * ROWS + row][ch];
                 if (c == null) continue;
-                int o = (row * Song.CHANNELS + ch) * 4;
+                int o = (row * channels + ch) * 4;
                 int period = c[1] >= 0 ? PERIODS[c[1]] : 0;
                 pattern[o] = (byte) ((c[0] & 0xF0) | ((period >> 8) & 0x0F));
                 pattern[o + 1] = (byte) (period & 0xFF);

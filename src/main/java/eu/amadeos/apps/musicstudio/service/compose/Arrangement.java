@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Which part plays in which bar. Melody, bass and drums may come in four or eight bars after the intro and
+ * Which part plays in which bar. Melody, bass, drums, pad and arpeggio may come in four or eight bars after the intro and
  * rest for four or eight bars in the middle of the piece; the chords always play and hold it together. Intro,
  * outro, the first and the last four bars between them are never touched.
  *
@@ -40,7 +40,7 @@ final class Arrangement {
         double variety = r.variety() / 100.0;
         int blocks = (to - from) / BLOCK;
         if (variety > 0 && blocks >= 2) {
-            for (Part part : new Part[]{Part.MELODY, Part.BASS, Part.DRUMS}) {
+            for (Part part : new Part[]{Part.MELODY, Part.BASS, Part.DRUMS, Part.PAD, Part.ARPEGGIO}) {
                 Random random = new Random(r.seed(part) * 1_000_003L + ("arrangement." + part.id()).hashCode());
                 boolean[] rest = new boolean[blocks];
                 double late = random.nextDouble();

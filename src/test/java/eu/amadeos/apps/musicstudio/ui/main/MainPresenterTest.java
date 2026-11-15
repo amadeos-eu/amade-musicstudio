@@ -220,7 +220,7 @@ class MainPresenterTest {
         presenter.setMuted(Part.DRUMS, true);
         executor.runAll();
         assertEquals(Set.of(Part.DRUMS), view.muted);
-        assertEquals(EnumSet.of(Part.MELODY, Part.CHORDS, Part.BASS), presenter.audible());
+        assertEquals(EnumSet.complementOf(EnumSet.of(Part.DRUMS)), presenter.audible());
         presenter.setSolo(Part.BASS, true);
         executor.runAll();
         assertEquals(Set.of(Part.BASS), view.solo);
@@ -240,7 +240,7 @@ class MainPresenterTest {
         executor.runAll();
         assertEquals(Instrument.MARIMBA, presenter.recipe().voice(Part.MELODY).instrument());
         assertEquals(Kit.values()[Kit.values().length - 1], presenter.recipe().kit());
-        Voice chosen = new Voice(Instrument.HARP, 1, 10, 90, 60);
+        Voice chosen = Voice.of(Instrument.HARP).withOctave(1).withAttack(10).withRelease(90).withVolume(60);
         view.instrumentAnswer = preview -> {
             Audio sound = preview.sound(chosen, 60);
             preview.play(sound);
@@ -257,6 +257,32 @@ class MainPresenterTest {
         view.instrumentAnswer = preview -> Optional.empty();
         presenter.chooseInstrument(Part.BASS);
         assertEquals(r, presenter.recipe());
+    }
+
+    @Test
+    void padAndArpeggioCanBeSwitchedOffAndOn() {
+        start();
+        assertTrue(presenter.recipe().plays(Part.PAD), "a Lo-Fi piece has a pad");
+        assertFalse(presenter.recipe().plays(Part.ARPEGGIO));
+        presenter.setPlaying(Part.PAD, false);
+        executor.runAll();
+        assertFalse(presenter.recipe().plays(Part.PAD));
+        assertFalse(view.recipe.plays(Part.PAD));
+        presenter.setPlaying(Part.MELODY, false);
+        assertTrue(presenter.recipe().plays(Part.MELODY), "only the extras can be switched off");
+        presenter.setInstrument(Part.ARPEGGIO, Instrument.HARP);
+        executor.runAll();
+        assertTrue(presenter.recipe().plays(Part.ARPEGGIO), "choosing an instrument switches the part on");
+        assertEquals(Instrument.HARP, presenter.recipe().voice(Part.ARPEGGIO).instrument());
+        Voice moving = Voice.of(Instrument.STRINGS).withSweep(70, 2).withTremolo(40, 4);
+        view.instrumentAnswer = preview -> Optional.of(moving);
+        presenter.chooseInstrument(Part.PAD);
+        executor.runAll();
+        assertTrue(presenter.recipe().plays(Part.PAD));
+        assertEquals(moving, presenter.recipe().voice(Part.PAD));
+        presenter.goBack();
+        presenter.goBack();
+        assertFalse(presenter.recipe().plays(Part.ARPEGGIO), "switching is a step of the history");
     }
 
     @Test
@@ -376,7 +402,7 @@ class MainPresenterTest {
         assertTrue(view.commands.exporting());
         assertTrue(view.busy);
         executor.runAll();
-        assertEquals("Exported out.wav and 4 files with the single parts.", view.status);
+        assertEquals("Exported out.wav and 5 files with the single parts.", view.status);
         assertTrue(Files.exists(dir.resolve("out.wav")));
         assertTrue(Files.exists(dir.resolve("out-drums.wav")));
         assertFalse(view.commands.exporting());

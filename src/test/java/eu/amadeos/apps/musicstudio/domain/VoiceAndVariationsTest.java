@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class VoiceAndVariationsTest {
     @Test
     void aVoiceReadsBackItsText() {
-        Voice v = new Voice(Instrument.WARM_PAD, -1, 80, 20, 60);
+        Voice v = Voice.of(Instrument.WARM_PAD).withOctave(-1).withAttack(80).withRelease(20).withVolume(60);
         assertEquals("warm-pad,-1,80,20,60", v.toText());
         assertEquals(v, Voice.parse(v.toText(), Voice.of(Instrument.PIANO)));
         assertEquals(Voice.of(Instrument.PIANO), Voice.parse("nonsense", Voice.of(Instrument.PIANO)));

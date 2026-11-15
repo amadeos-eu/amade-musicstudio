@@ -47,6 +47,8 @@ import java.util.Set;
  */
 public final class TrackPanel extends JPanel {
     static final int HEAD_WIDTH = 190;
+    /** The first entry of the list of a pad or an arpeggio: the part does not play. */
+    static final Object OFF = new Object();
 
     private final Messages msg;
     private final SectionBar sections;
@@ -69,19 +71,21 @@ public final class TrackPanel extends JPanel {
             super(new BorderLayout(0, 2));
             setName("head." + part.id());
             setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 1, 0,
-                    javax.swing.UIManager.getColor("Separator.foreground")), BorderFactory.createEmptyBorder(6, 6, 6, 8)));
+                    javax.swing.UIManager.getColor("Separator.foreground")), BorderFactory.createEmptyBorder(3, 6, 3, 8)));
             JLabel name = new JLabel(msg.get(part.key()), new Swatch(part), JLabel.LEFT);
             name.setFont(name.getFont().deriveFont(Font.BOLD));
             name.setIconTextGap(6);
-            Object[] items = part.tonal() ? Instrument.values() : Kit.values();
-            sound = new JComboBox<>(items);
+            sound = new JComboBox<>();
+            if (part.extra()) sound.addItem(OFF);
+            for (Object item : part.tonal() ? Instrument.values() : Kit.values()) sound.addItem(item);
             sound.setName("head." + part.id() + ".sound");
             sound.setRenderer(new DefaultListCellRenderer() {
                 @Override
                 public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected,
                                                               boolean focus) {
                     String text = value instanceof Instrument i ? msg.get(i.key())
-                            : value instanceof Kit k ? msg.get(k.key()) : String.valueOf(value);
+                            : value instanceof Kit k ? msg.get(k.key()) : value == OFF ? msg.get("track.off")
+                            : String.valueOf(value);
                     return super.getListCellRendererComponent(list, text, index, selected, focus);
                 }
             });
@@ -89,6 +93,7 @@ public final class TrackPanel extends JPanel {
                 if (updating) return;
                 if (sound.getSelectedItem() instanceof Instrument i) presenter.setInstrument(part, i);
                 else if (sound.getSelectedItem() instanceof Kit k) presenter.setKit(k);
+                else if (sound.getSelectedItem() == OFF) presenter.setPlaying(part, false);
             });
             JPanel soundRow = new JPanel(new BorderLayout(4, 0));
             soundRow.setOpaque(false);
@@ -130,7 +135,7 @@ public final class TrackPanel extends JPanel {
             nameRow.setOpaque(false);
             nameRow.add(name, BorderLayout.CENTER);
             nameRow.add(keep, BorderLayout.EAST);
-            JPanel top = new JPanel(new java.awt.GridLayout(0, 1, 0, 3));
+            JPanel top = new JPanel(new java.awt.GridLayout(0, 1, 0, 2));
             top.setOpaque(false);
             top.add(nameRow);
             top.add(soundRow);
@@ -220,7 +225,8 @@ public final class TrackPanel extends JPanel {
         try {
             for (Part part : Part.values()) {
                 Head head = heads.get(part);
-                head.sound.setSelectedItem(part.tonal() ? recipe.voice(part).instrument() : recipe.kit());
+                head.sound.setSelectedItem(!part.tonal() ? recipe.kit()
+                        : recipe.plays(part) ? recipe.voice(part).instrument() : OFF);
                 head.volume.setValue(recipe.volume(part));
                 head.keep.setSelected(kept.contains(part));
             }

@@ -1,5 +1,6 @@
 package eu.amadeos.apps.musicstudio.service.export;
 
+import eu.amadeos.apps.musicstudio.domain.Part;
 import eu.amadeos.apps.musicstudio.domain.Recipe;
 import eu.amadeos.apps.musicstudio.domain.Style;
 import eu.amadeos.apps.musicstudio.service.compose.Composer;
@@ -88,7 +89,7 @@ class WritersTest {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         new MidiWriter().write(song, RecipeTag.of(RECIPE), out);
         Sequence seq = MidiSystem.getSequence(new ByteArrayInputStream(out.toByteArray()));
-        assertEquals(1 + 8, seq.getTracks().length);
+        assertEquals(1 + 8 + 2, seq.getTracks().length, "the two voices of the pad have tracks, the silent arpeggio has none");
         assertEquals(RECIPE, RecipeTag.parse(MidiWriter.readComment(seq).orElseThrow()).orElseThrow());
         int notes = 0;
         boolean drums = false;
@@ -111,12 +112,13 @@ class WritersTest {
 
     @Test
     void modHasEightChannelsSamplesAndTheRecipe() throws IOException {
-        Song song = new Composer().compose(RECIPE, false);
+        Recipe classic = RECIPE.withPlaying(Part.PAD, false);
+        Song song = new Composer().compose(classic, false);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        new ModWriter(new AudioRenderer()).write(song, RecipeTag.of(RECIPE), out);
+        new ModWriter(new AudioRenderer()).write(song, RecipeTag.of(classic), out);
         byte[] mod = out.toByteArray();
         assertEquals("8CHN", new String(mod, 1080, 4, StandardCharsets.US_ASCII));
-        assertEquals(RECIPE, RecipeTag.parse(ModWriter.readComment(mod)).orElseThrow());
+        assertEquals(classic, RecipeTag.parse(ModWriter.readComment(mod)).orElseThrow());
         int songLength = mod[950] & 0xFF;
         assertEquals((song.steps() + 63) / 64, songLength);
         int patterns = 0;
@@ -131,6 +133,38 @@ class WritersTest {
         assertTrue(samples >= 5, "drums and instruments as samples: " + samples);
         assertEquals(1084 + patterns * 64 * 8 * 4 + sampleBytes, mod.length);
         assertTrue(mod.length < 400_000, "a few hundred KB: " + mod.length);
+    }
+
+    @Test
+    void modWithPadAndArpeggioHasTwelveChannels() throws IOException {
+        Recipe wide = RECIPE.withPlaying(Part.PAD, true).withPlaying(Part.ARPEGGIO, true);
+        Song song = new Composer().compose(wide, false);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        new ModWriter(new AudioRenderer()).write(song, RecipeTag.of(wide), out);
+        byte[] mod = out.toByteArray();
+        assertEquals("12CH", new String(mod, 1080, 4, StandardCharsets.US_ASCII));
+        assertEquals(wide, RecipeTag.parse(ModWriter.readComment(mod)).orElseThrow());
+        int patterns = 0;
+        for (int i = 0; i < 128; i++) patterns = Math.max(patterns, (mod[952 + i] & 0xFF) + 1);
+        long sampleBytes = 0;
+        int samples = 0;
+        for (int i = 0; i < 31; i++) {
+            int words = ((mod[20 + i * 30 + 22] & 0xFF) << 8) | (mod[20 + i * 30 + 23] & 0xFF);
+            if (words > 0) samples++;
+            sampleBytes += 2L * words;
+        }
+        assertEquals(1084 + patterns * 64 * 12 * 4 + sampleBytes, mod.length);
+        assertTrue(samples >= 7, "pad and arpeggio have samples of their own: " + samples);
+        // Every row of the first pattern: the pad's two notes start in channels 9 and 10 (counted from 1).
+        int first = 1084 + (mod[952] & 0xFF) * 64 * 12 * 4;
+        boolean pad = false;
+        for (int row = 0; row < 64; row++) {
+            int o = first + (row * 12 + Song.PAD) * 4;
+            if (((mod[o] & 0x0F) << 8 | (mod[o + 1] & 0xFF)) != 0) pad = true;
+            int empty = first + (row * 12 + 11) * 4;
+            assertEquals(0, mod[empty] | mod[empty + 1] | mod[empty + 2] | mod[empty + 3], "the twelfth channel is empty");
+        }
+        assertTrue(pad, "the pad plays in the first pattern");
     }
 
     @Test

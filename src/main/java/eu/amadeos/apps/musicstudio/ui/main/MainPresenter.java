@@ -229,6 +229,8 @@ public final class MainPresenter {
             x.melody = x.melody.withVolume(Voice.DEFAULT_VOLUME);
             x.chords = x.chords.withVolume(Voice.DEFAULT_VOLUME);
             x.bass = x.bass.withVolume(Voice.DEFAULT_VOLUME);
+            x.pad = x.pad.withVolume(Voice.DEFAULT_VOLUME);
+            x.arpeggio = x.arpeggio.withVolume(Voice.DEFAULT_VOLUME);
             x.drumVolume = Voice.DEFAULT_VOLUME;
         });
     }
@@ -318,9 +320,17 @@ public final class MainPresenter {
         }));
     }
 
+    /** Another instrument for the part; a pad or an arpeggio that was off plays again. */
     public void setInstrument(Part part, Instrument instrument) {
         Voice voice = recipe.voice(part);
-        if (voice.instrument() != instrument) change(recipe.withVoice(part, voice.withInstrument(instrument)));
+        Recipe next = recipe.withVoice(part, voice.withInstrument(instrument));
+        if (part.extra()) next = next.withPlaying(part, true);
+        if (!next.equals(recipe)) change(next);
+    }
+
+    /** Switches the pad or the arpeggio on or off. */
+    public void setPlaying(Part part, boolean on) {
+        if (part.extra() && recipe.plays(part) != on) change(recipe.withPlaying(part, on));
     }
 
     public void setKit(Kit kit) {
@@ -348,7 +358,11 @@ public final class MainPresenter {
             }
         });
         if (player.isPlaying()) stop();
-        chosen.ifPresent(v -> change(recipe.withVoice(part, v)));
+        chosen.ifPresent(v -> {
+            Recipe next = recipe.withVoice(part, v);
+            if (part.extra()) next = next.withPlaying(part, true);
+            if (!next.equals(recipe)) change(next);
+        });
     }
 
     public void setKept(Part part, boolean keep) {

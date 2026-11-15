@@ -72,6 +72,8 @@ public final class Composer {
             bass();
             if (r.kit() != Kit.NONE) drums();
             melody();
+            if (r.plays(Part.PAD)) pad();
+            if (r.plays(Part.ARPEGGIO)) arpeggio();
             arrange();
             List<Note> shifted = new ArrayList<>(notes.size());
             for (Note n : notes) {
@@ -566,6 +568,81 @@ public final class Composer {
                     }
                 }
             }
+        }
+
+        // ---------------------------------------------------------------- pad and arpeggio
+
+        /** Two long notes of every chord, held until the chord changes or two bars have passed. */
+        void pad() {
+            Random random = random(Part.PAD, "pad");
+            Instrument in = r.pad().instrument();
+            int voicing = random.nextInt(3);
+            int[] previous = null;
+            for (int bar = 0; bar < bars; ) {
+                Section sec = section(bar);
+                int[] pcs = chordsPerBar[bar];
+                int run = 1;
+                if (bar + 1 < sec.endBar() && Arrays.equals(pcs, chordsPerBar[bar + 1])) run = 2;
+                int[] v = voice(pcs, previous, 60);
+                previous = v;
+                int low = switch (voicing) {
+                    case 0 -> v[0];
+                    case 1 -> v[1];
+                    default -> 48 + pcs[0];
+                };
+                int high = voicing == 2 ? v[1] : v[2];
+                double vel = edge(sec) ? 0.5 : sec.kind() == Kind.B ? 0.68 : 0.6;
+                if (sec.kind() == Kind.OUTRO) vel *= 1 - 0.5 * (bar - sec.startBar()) / (double) sec.bars();
+                int base = bar * Song.STEPS_PER_BAR;
+                add(base, run * Song.STEPS_PER_BAR, Song.PAD, low, vel, in);
+                add(base, run * Song.STEPS_PER_BAR, Song.PAD + 1, high, vel, in);
+                bar += run;
+            }
+        }
+
+        /**
+         * The notes of the chord one after another, up, down, up and down or in leaps; sixteenths, or eighths
+         * in slow and sparse pieces. The figure starts anew with every bar and differs between A and B.
+         */
+        void arpeggio() {
+            Random random = random(Part.ARPEGGIO, "arpeggio");
+            Instrument in = r.arpeggio().instrument();
+            int stepLength = st.barsPerChord() == 2 || energy < 0.4 ? 2 : 1;
+            int shapeA = random.nextInt(4);
+            int shapeB = (shapeA + 1 + random.nextInt(3)) % 4;
+            int span = 5 + random.nextInt(3);
+            for (int bar = 0; bar < bars; bar++) {
+                Section sec = section(bar);
+                if (sec.kind() == Kind.INTRO && bar < sec.startBar() + sec.bars() / 2) continue;
+                if (sec.kind() == Kind.OUTRO && bar > sec.startBar()) continue;
+                int[] pcs = chordsPerBar[bar];
+                int[] ladder = new int[span];
+                for (int pitch = 60, i = 0; i < span; pitch++) {
+                    for (int c = 0; c < 3; c++) {
+                        if (pitch % 12 == pcs[c]) {
+                            ladder[i++] = pitch;
+                            break;
+                        }
+                    }
+                }
+                int shape = sec.kind() == Kind.B ? shapeB : shapeA;
+                double vel = edge(sec) ? 0.5 : 0.62;
+                int base = bar * Song.STEPS_PER_BAR;
+                for (int t = 0, i = 0; t < Song.STEPS_PER_BAR; t += stepLength, i++) {
+                    add(base + t, stepLength, Song.ARPEGGIO, ladder[rung(shape, i, span)], vel + (t % 4 == 0 ? 0.15 : 0), in);
+                }
+            }
+        }
+
+        /** The rung of the ladder for the {@code i}-th note of a figure. */
+        static int rung(int shape, int i, int span) {
+            int around = 2 * span - 2;
+            return switch (shape) {
+                case 0 -> i % span;
+                case 1 -> span - 1 - i % span;
+                case 2 -> i % around < span ? i % around : around - i % around;
+                default -> Math.min(span - 1, (i / 2) % (span - 1) + (i % 2 == 0 ? 0 : 2));
+            };
         }
 
         int keyNoteNear(int p) {
