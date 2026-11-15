@@ -77,8 +77,8 @@ public final class AudioRenderer {
             case SYNTH_BASS -> 0.6;
             case CHIP_TRIANGLE -> 0.7;
             case GUITAR, HARP -> 1.8;
-            case ELECTRIC_GUITAR -> 2.6;
-            case DISTORTED_GUITAR -> 1.9;
+            case ELECTRIC_GUITAR -> 1.2;
+            case DISTORTED_GUITAR -> 2.3;
             case BELLS, MARIMBA -> 1.1;
             default -> 1;
         };
@@ -119,6 +119,7 @@ public final class AudioRenderer {
             throw e;
         }
         if (cancelled.getAsBoolean()) throw new CancellationException();
+        for (Part p : Part.values()) if (amped(r, p)) amplify(song, p, channels);
         Map<Part, float[]> left = new EnumMap<>(Part.class);
         Map<Part, float[]> right = new EnumMap<>(Part.class);
         Map<Part, float[]> send = new EnumMap<>(Part.class);
@@ -159,12 +160,41 @@ public final class AudioRenderer {
         return new Stems(song, left, right, send, frames, SAMPLE_RATE, LEVEL / peak * 0.85);
     }
 
+    /** Whether the part plays the distorted guitar: its strings then share one amplifier. */
+    static boolean amped(Recipe r, Part part) {
+        return part.tonal() && r.voice(part).instrument() == Instrument.DISTORTED_GUITAR;
+    }
+
+    /**
+     * Puts the strings of a part, which its channels hold without any amplifier, through one amplifier
+     * together and hands the result back to the channels in equal shares.
+     */
+    private static void amplify(Song song, Part part, float[][] channels) {
+        Recipe r = song.recipe();
+        List<Integer> own = new ArrayList<>();
+        for (int ch = 0; ch < Song.CHANNELS; ch++) if (Song.part(ch) == part) own.add(ch);
+        float[] bus = new float[channels[own.getFirst()].length];
+        for (int ch : own) for (int i = 0; i < bus.length; i++) bus[i] += channels[ch][i];
+        Amp.play(bus, SAMPLE_RATE);
+        if (part != Part.BASS) Dsp.lowPass(bus, brightCutoff(r.brightness()), 0.6, SAMPLE_RATE);
+        move(bus, r.voice(part), song.stepSeconds(), song.seconds(),
+                part == Part.BASS ? 5000 : Math.min(12_000, brightCutoff(r.brightness())), SAMPLE_RATE);
+        // A single line through the amplifier is as loud as a full chord, so the melody is turned down.
+        float g = (float) (instrumentGain(r, own.getFirst(), Instrument.DISTORTED_GUITAR, null) / own.size()
+                * (own.size() == 1 ? 0.65 : 1));
+        for (int ch : own) {
+            channels[ch] = new float[bus.length];
+            for (int i = 0; i < bus.length; i++) channels[ch][i] = bus[i] * g;
+        }
+    }
+
     private float[] channel(Song song, int channel, int frames, BooleanSupplier cancelled) {
         Recipe r = song.recipe();
         float[] out = new float[frames];
         double stepSeconds = song.stepSeconds();
         Part part = Song.part(channel);
         Tone tone = part.tonal() ? Tone.of(r.voice(part)) : Tone.NEUTRAL;
+        boolean amped = amped(r, part);
         int index = 0;
         for (Note n : song.notes()) {
             if (n.channel() != channel) continue;
@@ -175,12 +205,15 @@ public final class AudioRenderer {
             long noiseSeed = r.seed(part) * 7919 + index;
             float[] sound = n.isDrum()
                     ? synth.drum(n.drum(), r.kit(), r.hardness() / 100.0, n.velocity(), SAMPLE_RATE, noiseSeed)
+                    : amped ? synth.string(n.pitch(), n.velocity(), Math.max(0.03, n.length() * stepSeconds - 0.01),
+                    tone, SAMPLE_RATE, noiseSeed)
                     : synth.note(n.instrument(), n.pitch(), n.velocity(), Math.max(0.03, n.length() * stepSeconds - 0.01),
                     tone, SAMPLE_RATE, noiseSeed);
-            float g = (float) instrumentGain(r, channel, n.instrument(), n.drum());
+            float g = amped ? 1 : (float) instrumentGain(r, channel, n.instrument(), n.drum());
             int len = Math.min(sound.length, frames - start);
             for (int i = 0; i < len; i++) out[start + i] += sound[i] * g;
         }
+        if (amped) return out; // filtered and moved after the amplifier
         if (part == Part.DRUMS) {
             Dsp.lowPass(out, drumCutoff(r.hardness()), 0.707, SAMPLE_RATE);
         } else if (part != Part.BASS) {

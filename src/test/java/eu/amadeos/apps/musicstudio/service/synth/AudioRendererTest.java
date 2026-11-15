@@ -200,6 +200,44 @@ class AudioRendererTest {
     }
 
     @Test
+    void aChordOnTheDistortedGuitarGoesThroughOneAmplifier() {
+        Synth synth = new Synth();
+        int sr = 44_100;
+        float[] root = synth.string(40, 0.9, 1.0, Tone.NEUTRAL, sr, 1);
+        float[] fifth = synth.string(47, 0.9, 1.0, Tone.NEUTRAL, sr, 2);
+        float[] together = new float[root.length];
+        for (int i = 0; i < together.length; i++) together[i] = root[i] + fifth[i];
+        Amp.play(together, sr);
+        Amp.play(root, sr);
+        Amp.play(fifth, sr);
+        // Two notes in one amplifier give a note that neither has: the difference of their frequencies,
+        // an octave below the root of a fifth.
+        double below = Dsp.hz(40) / 2;
+        double apart = tone(root, below, sr) + tone(fifth, below, sr);
+        assertTrue(tone(together, below, sr) > 5 * apart, "the chord growls: " + tone(together, below, sr)
+                + " against " + apart);
+        Recipe metal = Recipe.of(Style.METAL, 3).with(b -> b.lengthSeconds = 20);
+        assertTrue(AudioRenderer.amped(metal, Part.CHORDS) && AudioRenderer.amped(metal, Part.MELODY));
+        assertFalse(AudioRenderer.amped(metal, Part.BASS));
+        Stems stems = renderer.render(new Composer().compose(metal, false), DIRECT, () -> false);
+        assertTrue(rms(stems.left().get(Part.CHORDS), 0, stems.frames()) > 1e-3);
+    }
+
+    /** How strong one frequency is in the middle of a note. */
+    private static double tone(float[] x, double f, double sr) {
+        double re = 0;
+        double im = 0;
+        int from = (int) (0.2 * sr);
+        int n = (int) (0.5 * sr);
+        for (int i = 0; i < n; i++) {
+            double window = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / n);
+            re += x[from + i] * window * Math.cos(2 * Math.PI * f * i / sr);
+            im += x[from + i] * window * Math.sin(2 * Math.PI * f * i / sr);
+        }
+        return Math.hypot(re, im) / n;
+    }
+
+    @Test
     void thePluckedStringsAreInTune() {
         Synth synth = new Synth();
         int sr = 44_100;

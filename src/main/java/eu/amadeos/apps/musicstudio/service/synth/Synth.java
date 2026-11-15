@@ -12,8 +12,8 @@ import java.util.Random;
 /**
  * The instruments and drums, calculated sample by sample: additive synthesis for the piano and the organ,
  * frequency modulation for electric piano, bells and marimba, filtered band-limited waves for pads, strings,
- * leads and basses, a plucked string (Karplus-Strong) for the guitars, harp and the plucked basses, the same string driven into
- * distortion for the overdriven guitar, and noise, sweeps
+ * leads and basses, a plucked string (Karplus-Strong) for guitar, harp and the plucked basses, a string with pick, pickup and
+ * vibrato for the electric guitars, which {@link Amp} overdrives, and noise, sweeps
  * and filters for the drums; the sung voices are in {@link Vocal}. Thread-safe; the noise of a note comes from the seed it is given.
  */
 public final class Synth {
@@ -69,7 +69,17 @@ public final class Synth {
                 fm(out, in, f, velocity, sr);
                 if (in != Instrument.BELLS) damp(out, held, (in == Instrument.VIBRAPHONE ? 0.6 : 0.3) * tone.release(), sr);
             }
-            case DISTORTED_GUITAR -> distorted(out, f, velocity, held, rel, sr, noise);
+            case DISTORTED_GUITAR -> {
+                // One note through an amplifier of its own; the mix puts all notes of a part through one.
+                guitarString(out, f, velocity, held, rel, sr, noise);
+                Amp.play(out, sr);
+            }
+            case ELECTRIC_GUITAR -> {
+                guitarString(out, f, velocity, held, rel * 4, sr, noise);
+                Filter warm = new Filter().set(4200, 0.8, sr);
+                // Without an amplifier that holds it, the note dies away within a second or two.
+                for (int i = 0; i < n; i++) out[i] = (float) (0.9 * warm.process(out[i]) * Math.exp(-i / sr / 1.3));
+            }
             case SAXOPHONE -> {
                 Osc reed = new Osc(Dsp.table(Wave.PULSE, f, sr, 0.36), f, sr, 0);
                 Filter body = new Filter();
@@ -131,7 +141,7 @@ public final class Synth {
                     out[i] = (float) (0.6 * v * Dsp.envelope(t, 0.06 * tone.attack(), 0.3, 0.85, rel, held));
                 }
             }
-            case GUITAR, HARP, ELECTRIC_BASS, ELECTRIC_GUITAR, UPRIGHT_BASS -> plucked(out, in, f, velocity, held, rel, sr, noise);
+            case GUITAR, HARP, ELECTRIC_BASS, UPRIGHT_BASS -> plucked(out, in, f, velocity, held, rel, sr, noise);
             case MALE_OOH, MALE_AAH, FEMALE_OOH, FEMALE_AAH, CHILD_OOH, CHILD_AAH, CHOIR_OOH, CHOIR_AAH, CHOIR_MMM ->
                     Vocal.note(out, in, pitch, velocity, held, rel, tone, sr, noise);
             case SUB_BASS -> {
@@ -144,6 +154,20 @@ public final class Synth {
         }
         if (!in.sustained() && tone.attack() != 1) fadeIn(out, 0.003 * Math.pow(tone.attack(), 2.5), sr);
         finish(out, velocity, sr);
+        return out;
+    }
+
+    /**
+     * One note of the distorted guitar before its amplifier, mono; the mix sums the strings of a part and
+     * plays them through one {@link Amp}.
+     */
+    public float[] string(int pitch, double velocity, double held, Tone tone, double sampleRate, long noiseSeed) {
+        double rel = tail(Instrument.DISTORTED_GUITAR) * tone.release();
+        float[] out = new float[Math.max(1, (int) (Math.min(held + rel, MAX_RING) * sampleRate))];
+        guitarString(out, Dsp.hz(pitch), velocity, held, rel, sampleRate, new Random(noiseSeed));
+        if (tone.attack() != 1) fadeIn(out, 0.003 * Math.pow(tone.attack(), 2.5), sampleRate);
+        int fade = Math.min(out.length / 2, (int) (0.003 * sampleRate));
+        for (int i = 0; i < fade; i++) out[out.length - 1 - i] *= (float) (i / (double) fade);
         return out;
     }
 
@@ -252,12 +276,11 @@ public final class Synth {
         double[] line = new double[length];
         boolean bass = in == Instrument.ELECTRIC_BASS || in == Instrument.UPRIGHT_BASS;
         Filter excite = new Filter().set(in == Instrument.ELECTRIC_BASS ? 900 : in == Instrument.UPRIGHT_BASS ? 600
-                : in == Instrument.HARP ? 2500 + 2000 * velocity
-                : in == Instrument.ELECTRIC_GUITAR ? 2600 + 2200 * velocity : 3500 + 3000 * velocity, 0.7, sr);
+                : in == Instrument.HARP ? 2500 + 2000 * velocity : 3500 + 3000 * velocity, 0.7, sr);
         for (int i = 0; i < length; i++) line[i] = excite.process(noise.nextDouble() * 2 - 1) * 1.6;
         double feedback = switch (in) {
             case HARP -> 0.9985;
-            case ELECTRIC_BASS, ELECTRIC_GUITAR -> 0.997; // steel strings ring longer than nylon
+            case ELECTRIC_BASS -> 0.997;
             case UPRIGHT_BASS -> 0.9955;
             default -> 0.994;
         };
@@ -280,54 +303,73 @@ public final class Synth {
             }
             out[i] = (float) v;
         }
-        damp(out, held, (in == Instrument.HARP ? 0.6 : in == Instrument.ELECTRIC_GUITAR ? 0.2 : 0.12) * rel / tail(in), sr);
+        damp(out, held, (in == Instrument.HARP ? 0.6 : 0.12) * rel / tail(in), sr);
     }
 
     /**
-     * An electric guitar through an overdriven amplifier: a plucked steel string that rings long, driven hard
-     * into a soft limit, which adds overtones and keeps the note loud while the string dies away, and then the
-     * speaker cabinet, which lets little through above four kilohertz. A short note is a muted one.
+     * The string of an electric guitar as its pickup hears it, before any amplifier. What makes it a guitar
+     * and not a keyboard: the pick strikes the string a fifth of its length from the bridge and the pickup
+     * sits near it, which both take certain overtones out; a hard stroke starts a little sharp and settles;
+     * a long note of the melody gets the vibrato of the fretting finger; and a very short note is one muted
+     * with the palm, dull and dead at once.
      */
-    private static void distorted(float[] out, double f, double velocity, double held, double rel, double sr,
-                                  Random noise) {
-        double delay = sr / f - 0.5;
-        int whole = (int) delay;
-        double frac = delay - whole;
-        int length = whole + 2;
-        double[] line = new double[length];
-        Filter excite = new Filter().set(1800 + 1500 * velocity, 0.7, sr);
-        for (int i = 0; i < length; i++) line[i] = excite.process(noise.nextDouble() * 2 - 1) * 1.6;
-        double drive = 6 + 14 * velocity;
-        Filter low = new Filter().set(110, 0.7, sr);
-        Filter cabinet = new Filter().set(3600, 1.2, sr);
-        Filter air = new Filter().set(5200, 0.7, sr);
-        Filter smooth = new Filter().set(9000, 0.6, sr * 4);
-        Filter fine = new Filter().set(9000, 0.6, sr * 4);
-        double before = 0;
+    static void guitarString(float[] out, double f, double velocity, double held, double rel, double sr,
+                             Random noise) {
+        double period = sr / f;
+        int size = (int) (period * 1.03) + 8;
+        double[] line = new double[size];
+        int first = (int) Math.ceil(period);
+        // The string as the pick leaves it: every overtone as strong as the place of the pick makes it, less
+        // the higher it is and the softer the stroke. Filtered noise, the usual start of a plucked string,
+        // would give every note other overtones by chance, sometimes hardly any fundamental.
+        double[] pluck = new double[first];
+        double bright = 2200 + 2600 * velocity;
+        double peak = 1e-9;
+        for (int k = 1; k * f < Math.min(sr * 0.4, bright * 4); k++) {
+            double amount = Math.sin(Math.PI * k * 0.18) / k / (1 + Math.pow(k * f / bright, 2))
+                    * (0.85 + 0.3 * noise.nextDouble());
+            for (int i = 0; i < first; i++) pluck[i] += amount * Math.sin(2 * Math.PI * k * i / period);
+        }
+        for (double v : pluck) peak = Math.max(peak, Math.abs(v));
+        double level = 1.6 * (0.35 + 0.65 * velocity);
+        for (int i = 0; i < first; i++) line[size - first + i] = pluck[i] / peak * level;
+        boolean muted = held < 0.12;
+        boolean sings = held > 0.4 && f > 190;
+        double feedback = muted ? 0.975 : 0.9988;
+        // How much of the sample before is mixed in on every round: less for high notes, which would
+        // otherwise lose their sound within half a second.
+        double blend = muted ? 0.5 : Math.max(0.1, Math.min(0.5, 0.5 * 330 / f));
+        double detune = (noise.nextDouble() - 0.5) * 5; // no two strokes are quite alike
+        double pickup = period * 0.22;
         int write = 0;
         double last = 0;
+        double dull = 0;
         for (int i = 0; i < out.length; i++) {
-            int r1 = (write + 1) % length;
-            int r2 = (write + 2) % length;
-            double y = line[r2] * (1 - frac) + line[r1] * frac;
-            line[write] = 0.9988 * 0.5 * (y + last);
+            double t = i / sr;
+            double cents = detune + 8 * velocity * Math.exp(-t / 0.05);
+            if (sings) cents += 14 * Math.sin(2 * Math.PI * 5.6 * t) * Math.min(1, Math.max(0, t - 0.18) / 0.25);
+            // The loop is one period long: the line, the blending with the sample before, and the muting filter.
+            double delay = Math.max(1, period / Math.pow(2, cents / 1200) - blend - (muted ? 1.857 : 0));
+            double y = read(line, write, delay);
+            double value = (1 - blend) * y + blend * last;
             last = y;
-            write = r1;
-            low.process(y);
-            // The limit adds overtones far above what the sample rate can hold; calculated four times as
-            // finely and filtered, they do not fold back as false notes.
-            double in = low.high;
-            double v = 0;
-            for (int k = 1; k <= 4; k++) {
-                double x = before + (in - before) * k / 4.0;
-                double d = Math.tanh(drive * x);
-                d = Math.tanh(1.5 * d + 0.3 * d * d); // a second stage, a little uneven like a valve
-                v = fine.process(smooth.process(d));
+            if (muted) {
+                dull += 0.35 * (value - dull);
+                value = dull;
             }
-            before = in;
-            out[i] = (float) (0.42 * air.process(cabinet.process(v)) * Math.exp(-i / sr / 4.5));
+            line[write] = feedback * value;
+            out[i] = (float) (y - 0.7 * read(line, write, Math.max(1, pickup)));
+            write = (write + 1) % size;
         }
-        damp(out, held, 0.1 * rel / tail(Instrument.DISTORTED_GUITAR), sr);
+        damp(out, held, muted ? 0.02 : 0.06 * rel / tail(Instrument.DISTORTED_GUITAR), sr);
+    }
+
+    /** What was written into the ring {@code delay} samples before the place that is written next. */
+    private static double read(double[] line, int write, double delay) {
+        double at = write - delay;
+        int whole = (int) Math.floor(at);
+        double frac = at - whole;
+        return line[Math.floorMod(whole, line.length)] * (1 - frac) + line[Math.floorMod(whole + 1, line.length)] * frac;
     }
 
     /** After the key is let go, a decaying note dies away faster. */
