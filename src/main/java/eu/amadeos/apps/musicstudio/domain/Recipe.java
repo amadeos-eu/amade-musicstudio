@@ -23,6 +23,7 @@ import java.util.function.Consumer;
  * @param energy        0 (sparse) to 100 (busy): more drum hits and melody notes
  * @param fills         0 (never) to 100 (often): drum fills at the end of a section
  * @param variety       0 (steady) to 100 (changing): how often melody, bass and drums rest and come back
+ * @param harmony       0 (plain) to 100 (colourful): how many chords are suspended, widened or turned
  * @param brightness    0 (warm) to 100 (bright): the filter on melody and chords
  * @param reverb        0 (dry) to 100 (hall)
  * @param crackle       0 (clean) to 100: noise and clicks like an old record
@@ -32,7 +33,7 @@ import java.util.function.Consumer;
  */
 public record Recipe(Style style, long seed, long melodySeed, long chordSeed, long bassSeed, long drumSeed, int key,
                      int bpm, int lengthSeconds, int hardness, int swing, int energy, int fills, int variety,
-                     int brightness, int reverb, int crackle, Voice melody, Voice chords, Voice bass, Kit kit,
+                     int harmony, int brightness, int reverb, int crackle, Voice melody, Voice chords, Voice bass, Kit kit,
                      int drumVolume, long padSeed, long arpeggioSeed, Voice pad, Voice arpeggio, boolean padOn,
                      boolean arpeggioOn) {
     public static final int MIN = 0;
@@ -71,6 +72,7 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
         energy = clamp(energy);
         fills = clamp(fills);
         variety = clamp(variety);
+        harmony = clamp(harmony);
         brightness = clamp(brightness);
         reverb = clamp(reverb);
         crackle = clamp(crackle);
@@ -85,7 +87,7 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
     public static Recipe of(Style style, long seed) {
         return new Recipe(style, seed, seed, seed, seed, seed, -1, style.bpm(), DEFAULT_LENGTH,
                 style.defaultHardness(), style.defaultSwing(), style.defaultEnergy(), DEFAULT_FILLS,
-                style.defaultVariety(), style.defaultBrightness(), style.defaultReverb(), style.defaultCrackle(),
+                style.defaultVariety(), style.defaultHarmony(), style.defaultBrightness(), style.defaultReverb(), style.defaultCrackle(),
                 style.defaultVoice(Part.MELODY), style.defaultVoice(Part.CHORDS), style.defaultVoice(Part.BASS),
                 style.defaultKit(), Voice.DEFAULT_VOLUME, seed, seed, style.defaultVoice(Part.PAD),
                 style.defaultVoice(Part.ARPEGGIO), style.defaultPlays(Part.PAD), style.defaultPlays(Part.ARPEGGIO));
@@ -243,6 +245,7 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
         public int energy;
         public int fills;
         public int variety;
+        public int harmony;
         public int brightness;
         public int reverb;
         public int crackle;
@@ -273,6 +276,7 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
             energy = r.energy;
             fills = r.fills;
             variety = r.variety;
+            harmony = r.harmony;
             brightness = r.brightness;
             reverb = r.reverb;
             crackle = r.crackle;
@@ -291,7 +295,7 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
 
         Recipe build() {
             return new Recipe(style, seed, melodySeed, chordSeed, bassSeed, drumSeed, key, bpm, lengthSeconds,
-                    hardness, swing, energy, fills, variety, brightness, reverb, crackle, melody, chords, bass,
+                    hardness, swing, energy, fills, variety, harmony, brightness, reverb, crackle, melody, chords, bass,
                     kit, drumVolume, padSeed, arpeggioSeed, pad, arpeggio, padOn, arpeggioOn);
         }
     }
@@ -332,6 +336,7 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
         v.put("energy", Integer.toString(energy));
         v.put("fills", Integer.toString(fills));
         v.put("variety", Integer.toString(variety));
+        v.put("harmony", Integer.toString(harmony));
         v.put("brightness", Integer.toString(brightness));
         v.put("reverb", Integer.toString(reverb));
         v.put("crackle", Integer.toString(crackle));
@@ -371,7 +376,7 @@ public record Recipe(Style style, long seed, long melodySeed, long chordSeed, lo
                 partSeed(v, Part.BASS, seed), partSeed(v, Part.DRUMS, seed), number(v.get("key"), -1),
                 number(v.get("bpm"), d.bpm), number(v.get("length"), d.lengthSeconds),
                 number(v.get("hardness"), d.hardness), number(v.get("swing"), d.swing),
-                number(v.get("energy"), d.energy), number(v.get("fills"), d.fills), number(v.get("variety"), d.variety),
+                number(v.get("energy"), d.energy), number(v.get("fills"), d.fills), number(v.get("variety"), d.variety), number(v.get("harmony"), d.harmony),
                 number(v.get("brightness"), d.brightness), number(v.get("reverb"), d.reverb),
                 number(v.get("crackle"), d.crackle), Voice.parse(v.get("melody"), d.melody),
                 Voice.parse(v.get("chords"), d.chords), Voice.parse(v.get("bass"), d.bass), kit, drumVolume,

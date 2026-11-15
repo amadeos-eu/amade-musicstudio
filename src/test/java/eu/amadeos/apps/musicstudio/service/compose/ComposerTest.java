@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -243,7 +244,7 @@ class ComposerTest {
                 assertTrue(n.step() >= end, "one note at a time: " + n);
                 end = n.step() + n.length();
                 int pc = Math.floorMod(n.pitch(), 12);
-                assertTrue(java.util.Arrays.stream(song.chordsPerBar()[bar]).limit(3).anyMatch(c -> c == pc),
+                assertTrue(java.util.Arrays.stream(song.chordsPerBar()[bar]).anyMatch(c -> c == pc),
                         style + ": a note of the chord in bar " + bar + ": " + n);
                 assertTrue(n.pitch() >= 60 && n.pitch() <= 96, n.toString());
                 pitches.add(n.pitch());
@@ -252,6 +253,171 @@ class ComposerTest {
             assertTrue(inBar(song, Part.ARPEGGIO, 0).isEmpty(), "the intro starts without it");
             assertTrue(inBar(song, Part.ARPEGGIO, song.bars() - 1).isEmpty(), "the outro ends without it");
         }
+    }
+
+    @Test
+    void euclideanRhythmsSpreadTheirHitsEvenly() {
+        assertEquals("10010010", text(Composer.euclid(3, 8, 0)), "the tresillo");
+        assertEquals("10101101", text(Composer.euclid(5, 8, 0)));
+        assertEquals("01001001", text(Composer.euclid(3, 8, 1)), "turned by one step");
+        assertEquals("1000100010001000", text(Composer.euclid(4, 16, 0)));
+        assertEquals("1111", text(Composer.euclid(4, 4, 2)));
+        for (int k = 1; k <= 16; k++) {
+            for (int turn = 0; turn < 16; turn++) {
+                int[] rhythm = Composer.euclid(k, 16, turn);
+                assertEquals(k, java.util.Arrays.stream(rhythm).sum());
+                for (int which = 0; which < k; which++) {
+                    int[] turned = Composer.startingWithANote(rhythm, which);
+                    assertEquals(1, turned[0], "starts with a note");
+                    assertEquals(k, java.util.Arrays.stream(turned).sum());
+                }
+            }
+        }
+    }
+
+    @Test
+    void theArpeggioOfASparsePieceLeavesStepsOut() {
+        Recipe busy = long_(Style.ELECTRO, 4711, 0).with(b -> b.energy = 100);
+        Recipe sparse = busy.with(b -> b.energy = 45);
+        Song full = composer.compose(busy, false);
+        Song thin = composer.compose(sparse, false);
+        int bar = full.sections().get(1).startBar();
+        assertEquals(16, inBar(full, Part.ARPEGGIO, bar).size(), "every sixteenth");
+        List<Note> notes = inBar(thin, Part.ARPEGGIO, bar);
+        assertEquals(12, notes.size(), "twelve of sixteen");
+        assertEquals(bar * 16, notes.getFirst().step());
+        double end = notes.getFirst().step();
+        for (Note n : notes) {
+            assertEquals(end, n.step(), "a note lasts until the next");
+            end = n.step() + n.length();
+        }
+        assertEquals(5, inBar(composer.compose(sparse.with(b -> b.energy = 30), false), Part.ARPEGGIO, bar).size(),
+                "five of eight eighths when the piece is sparse");
+    }
+
+    @Test
+    void aBusyPieceGetsOneMoreDrumSpreadOverTheBar() {
+        Recipe r = long_(Style.LOFI, 4711, 0);
+        Song quiet = composer.compose(r.with(b -> b.energy = 20), false);
+        Song busy = composer.compose(r.with(b -> b.energy = 100), false);
+        assertTrue(notes(quiet, Part.DRUMS).stream().noneMatch(n -> n.drum() == Drum.SHAKER));
+        Section a = busy.sections().get(1);
+        List<Note> shaker = inBar(busy, Part.DRUMS, a.startBar() + 1).stream().filter(n -> n.drum() == Drum.SHAKER).toList();
+        assertFalse(shaker.isEmpty());
+        assertTrue(shaker.size() <= 7, shaker.toString());
+        java.util.Set<Double> places = new java.util.TreeSet<>();
+        for (int bar = a.startBar(); bar < a.endBar(); bar++) {
+            inBar(busy, Part.DRUMS, bar).stream().filter(n -> n.drum() == Drum.SHAKER).forEach(n -> places.add(n.step() % 16));
+        }
+        assertTrue(places.size() <= 7, "the same three, five or seven places in every bar of the section: " + places);
+        for (Note s : shaker) {
+            assertTrue(notes(busy, Part.DRUMS).stream().noneMatch(n -> n != s && n.step() == s.step()
+                    && n.channel() == s.channel()), "never where its channel already has a hit: " + s);
+        }
+        assertTrue(inBar(busy, Part.DRUMS, 0).stream().noneMatch(n -> n.drum() == Drum.SHAKER) || a.startBar() == 0,
+                "not in the intro");
+    }
+
+    @Test
+    void withoutHarmonyAllChordsArePlain() {
+        for (Style style : Style.values()) {
+            Song song = composer.compose(long_(style, 4711, 0).with(b -> b.harmony = 0), false);
+            int[] steps = style.chordScale().steps();
+            for (int[] chord : song.chordsPerBar()) {
+                assertEquals(style.sevenths() ? 4 : 3, chord.length);
+                int degree = -1;
+                for (int d = 0; d < steps.length; d++) if ((song.keyNote() + steps[d]) % 12 == chord[0]) degree = d;
+                assertTrue(degree >= 0, "the root is a step of the scale");
+                for (int i = 0; i < chord.length; i++) {
+                    assertEquals((song.keyNote() + steps[(degree + 2 * i) % steps.length]) % 12, chord[i], "thirds of the scale");
+                }
+            }
+            for (int bar = 0; bar < song.bars(); bar++) {
+                List<Note> bass = inBar(song, Part.BASS, bar);
+                if (!bass.isEmpty()) {
+                    assertEquals(song.chordsPerBar()[bar][0], Math.floorMod(bass.getFirst().pitch() - 12 * song.recipe().bass().octave(), 12),
+                            style + ": the bass starts bar " + bar + " on the root");
+                }
+            }
+        }
+    }
+
+    @Test
+    void harmonyColoursTheChordsWithNotesOfTheScales() {
+        int suspended = 0;
+        int widened = 0;
+        int turned = 0;
+        int dominants = 0;
+        int coloured = 0;
+        for (Style style : Style.values()) {
+            for (long seed = 1; seed <= 12; seed++) {
+                Recipe r = long_(style, seed, 0).with(b -> b.key = 0);
+                Song plain = composer.compose(r.with(b -> b.harmony = 0), false);
+                Song half = composer.compose(r.with(b -> b.harmony = 50), false);
+                Song full = composer.compose(r.with(b -> b.harmony = 100), false);
+                java.util.Set<Integer> allowed = new java.util.HashSet<>();
+                for (int s : style.chordScale().steps()) allowed.add(s);
+                for (int s : style.melodyScale().steps()) allowed.add(s);
+                for (int bar = 0; bar < full.bars(); bar++) {
+                    int[] before = plain.chordsPerBar()[bar];
+                    int[] chord = full.chordsPerBar()[bar];
+                    for (int pc : chord) assertTrue(allowed.contains(pc), style + " seed " + seed + " bar " + bar + ": " + pc);
+                    if (!java.util.Arrays.equals(before, half.chordsPerBar()[bar])) {
+                        assertTrue(java.util.Arrays.equals(half.chordsPerBar()[bar], chord),
+                                "more harmony keeps the colours it had: " + style + " seed " + seed + " bar " + bar);
+                    }
+                    if (java.util.Arrays.equals(before, chord)) continue;
+                    coloured++;
+                    int third = Math.floorMod(chord[1] - chord[0], 12);
+                    if (third == 5 || third == 2) suspended++;
+                    if (chord.length > before.length) widened++;
+                    if (chord.length == 4 && third == 4 && Math.floorMod(chord[3] - chord[0], 12) == 10) dominants++;
+                }
+                for (int bar = 0; bar < full.bars(); bar++) {
+                    List<Note> bass = inBar(full, Part.BASS, bar);
+                    int[] chord = full.chordsPerBar()[bar];
+                    if (!bass.isEmpty() && Math.floorMod(bass.getFirst().pitch() - 12 * r.bass().octave(), 12) == chord[1]
+                            && chord[1] != chord[0]) {
+                        turned++;
+                    }
+                }
+                assertArrayEquals(plain.chordsPerBar()[plain.bars() - 1], full.chordsPerBar()[full.bars() - 1],
+                        "the piece ends on the key's own chord");
+                assertEquals(notes(plain, Part.MELODY).size(), notes(full, Part.MELODY).size(), "the melody keeps its rhythm");
+                assertEquals(notes(plain, Part.DRUMS), notes(full, Part.DRUMS));
+            }
+        }
+        assertTrue(coloured > 500, "coloured bars: " + coloured);
+        assertTrue(suspended > 100, "suspended: " + suspended);
+        assertTrue(widened > 100, "with a seventh, sixth or ninth: " + widened);
+        assertTrue(turned > 50, "with the third in the bass: " + turned);
+        assertTrue(dominants > 20, "dominant sevenths: " + dominants);
+    }
+
+    @Test
+    void aSuspendedChordHeldForTwoBarsComesToRest() {
+        int resolved = 0;
+        for (long seed = 1; seed <= 20; seed++) {
+            Song song = composer.compose(long_(Style.AMBIENT, seed, 0).with(b -> b.harmony = 100), false);
+            Section a = song.sections().get(1);
+            for (int bar = a.startBar(); bar + 1 < a.endBar(); bar += 2) {
+                int[] first = song.chordsPerBar()[bar];
+                int[] second = song.chordsPerBar()[bar + 1];
+                assertEquals(first[0], second[0], "the same root for two bars");
+                if (Math.floorMod(first[1] - first[0], 12) == 5) {
+                    int third = Math.floorMod(second[1] - second[0], 12);
+                    assertTrue(third == 3 || third == 4, "the fourth falls to the third");
+                    resolved++;
+                }
+            }
+        }
+        assertTrue(resolved > 5, "resolved: " + resolved);
+    }
+
+    private static String text(int[] rhythm) {
+        StringBuilder b = new StringBuilder();
+        for (int v : rhythm) b.append(v);
+        return b.toString();
     }
 
     @Test

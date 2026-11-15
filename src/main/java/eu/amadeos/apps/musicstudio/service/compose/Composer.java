@@ -19,7 +19,7 @@ import java.util.Random;
 
 /**
  * Writes the notes of a piece by rules. The form is intro, A, B, A, ... and outro. The chords follow a
- * chain of likely steps in the key; the melody is a motif of one bar, varied, repeated and closed on the key
+ * chain of likely steps in the key, coloured more or less by the recipe's harmony; the melody is a motif of one bar, varied, repeated and closed on the key
  * note, with chord notes on the strong beats; accompaniment, bass and drums follow the patterns of the style.
  * Melody, bass and drums may rest for some bars ({@link Arrangement}), and the drums answer to that.
  *
@@ -39,6 +39,29 @@ public final class Composer {
         return new Work(r, loop).song();
     }
 
+    /**
+     * A Euclidean rhythm: {@code k} hits spread as evenly as possible over {@code n} steps, then turned so
+     * that it starts {@code turn} steps later. Three over eight is the tresillo, five over eight the
+     * cinquillo.
+     */
+    static int[] euclid(int k, int n, int turn) {
+        int[] pattern = new int[n];
+        for (int i = 0; i < n; i++) pattern[Math.floorMod(i + turn, n)] = (i * k) % n < k ? 1 : 0;
+        return pattern;
+    }
+
+    /** The rhythm turned so that its hit number {@code which} falls on the first step. */
+    static int[] startingWithANote(int[] rhythm, int which) {
+        int n = rhythm.length;
+        int at = 0;
+        for (int i = 0, seen = 0; i < n; i++) {
+            if (rhythm[i] == 1 && seen++ == which) at = i;
+        }
+        int[] turned = new int[n];
+        for (int i = 0; i < n; i++) turned[i] = rhythm[(i + at) % n];
+        return turned;
+    }
+
     /** The state of one composition. */
     private static final class Work {
         final Recipe r;
@@ -50,6 +73,10 @@ public final class Composer {
         final boolean minor;
         int bars;
         int[][] chordsPerBar;
+        /** The pitch class the bass plays in each bar: the chord's root, or its third when the chord is turned. */
+        int[] bassPerBar;
+        /** The semitones from the bass note to the second note bass lines use: a fifth, unless the chord says otherwise. */
+        int[] fifthPerBar;
         final double energy;
 
         Work(Recipe r, boolean loop) {
@@ -198,16 +225,138 @@ public final class Composer {
         void harmony() {
             int[] progA = progression(random(Part.CHORDS, "progA"), 0);
             int[] progB = progression(random(Part.CHORDS, "progB"), minor ? 5 : 3);
+            Colour[] colourA = colours(progA, "colourA");
+            Colour[] colourB = colours(progB, "colourB");
             chordsPerBar = new int[bars][];
+            bassPerBar = new int[bars];
+            fifthPerBar = new int[bars];
             for (Section sec : sections) {
                 int[] prog = sec.kind() == Kind.B ? progB : progA;
+                Colour[] colour = sec.kind() == Kind.B ? colourB : colourA;
                 for (int b = 0; b < sec.bars(); b++) {
                     int idx = (b / st.barsPerChord()) % prog.length;
-                    chordsPerBar[sec.startBar() + b] = chord(prog[idx]);
+                    Colour c = colour[idx];
+                    // A suspended chord that is held for two bars comes to rest in the second.
+                    boolean resolves = c != null && c.suspended() && st.barsPerChord() == 2 && b % 2 == 1;
+                    setChord(sec.startBar() + b, c == null || resolves ? plain(prog[idx]) : c);
                 }
             }
             // The piece ends on the key's own chord.
-            if (!loop) chordsPerBar[bars - 1] = chord(0);
+            if (!loop) setChord(bars - 1, plain(0));
+        }
+
+        /**
+         * A chord as it is played.
+         *
+         * @param pcs       its pitch classes, the root first
+         * @param bass      the pitch class of the bass note
+         * @param fifth     semitones from the bass note to the second note of bass lines
+         * @param suspended whether the fourth stands in for the third
+         */
+        record Colour(int[] pcs, int bass, int fifth, boolean suspended) {
+        }
+
+        Colour plain(int degree) {
+            int[] pcs = chord(degree);
+            return new Colour(pcs, pcs[0], 7, false);
+        }
+
+        void setChord(int bar, Colour c) {
+            chordsPerBar[bar] = c.pcs();
+            bassPerBar[bar] = c.bass();
+            fifthPerBar[bar] = c.fifth();
+        }
+
+        /**
+         * The colours of the four chords of a progression; {@code null} leaves a chord as it is. The more
+         * {@link Recipe#harmony()}, the more chords are coloured: the third gives way to the fourth or the
+         * second (suspended), a seventh, a sixth or a ninth is added, the chord before the return home becomes
+         * a dominant seventh, an augmented or a diminished chord, and the bass takes the third instead of the
+         * root where that lets it move by a step. Only notes of the piece's scales are used, so the melody
+         * still fits. Three numbers are drawn for every chord whatever comes of them, so that more harmony
+         * keeps the colours it had and adds to them.
+         */
+        Colour[] colours(int[] progression, String what) {
+            Random random = random(Part.CHORDS, what);
+            double harmony = r.harmony() / 100.0;
+            boolean[] allowed = new boolean[12];
+            for (int s : st.chordScale().steps()) allowed[(keyNote + s) % 12] = true;
+            for (int s : st.melodyScale().steps()) allowed[(keyNote + s) % 12] = true;
+            Colour[] out = new Colour[progression.length];
+            int previousBass = -1;
+            for (int i = 0; i < progression.length; i++) {
+                double wanted = random.nextDouble();
+                double which = random.nextDouble();
+                double turned = random.nextDouble();
+                int degree = progression[i];
+                int[] p = chord(degree);
+                int root = p[0];
+                boolean diminished = Math.floorMod(p[2] - root, 12) == 6;
+                boolean major = Math.floorMod(p[1] - root, 12) == 4;
+                boolean fourth = allowed[(root + 5) % 12];
+                boolean second = allowed[(root + 2) % 12];
+                List<Colour> choices = new ArrayList<>();
+                List<Integer> weights = new ArrayList<>();
+                if (!diminished && fourth) {
+                    int[] pcs = p.clone();
+                    pcs[1] = (root + 5) % 12;
+                    choices.add(new Colour(pcs, root, 7, true));
+                    weights.add(2);
+                }
+                if (!diminished && second) {
+                    int[] pcs = p.clone();
+                    pcs[1] = (root + 2) % 12;
+                    choices.add(new Colour(pcs, root, 7, false));
+                    weights.add(2);
+                    choices.add(new Colour(new int[]{root, p[1], p.length == 4 ? p[3] : p[2], (root + 2) % 12}, root, 7, false));
+                    weights.add(2);
+                }
+                if (p.length == 3) {
+                    choices.add(new Colour(chord(degree, 4), root, diminished ? 6 : 7, false));
+                    weights.add(2);
+                    if (major && allowed[(root + 9) % 12]) {
+                        choices.add(new Colour(new int[]{root, p[1], p[2], (root + 9) % 12}, root, 7, false));
+                        weights.add(1);
+                    }
+                }
+                if (degree == 4 && allowed[(root + 4) % 12]) {
+                    if (allowed[(root + 10) % 12]) {
+                        choices.add(new Colour(new int[]{root, (root + 4) % 12, (root + 7) % 12, (root + 10) % 12}, root, 7, false));
+                        weights.add(3);
+                    }
+                    if (allowed[(root + 8) % 12]) {
+                        choices.add(new Colour(new int[]{root, (root + 4) % 12, (root + 8) % 12}, root, 8, false));
+                        weights.add(1);
+                    }
+                }
+                int leading = (keyNote + 11) % 12;
+                if (degree == 4 && i == progression.length - 1 && allowed[leading] && allowed[(leading + 3) % 12]
+                        && allowed[(leading + 6) % 12]) {
+                    choices.add(new Colour(new int[]{leading, (leading + 3) % 12, (leading + 6) % 12}, leading, 6, false));
+                    weights.add(1);
+                }
+                Colour c = null;
+                if (wanted < harmony * 0.75 && !choices.isEmpty()) {
+                    int total = 0;
+                    for (int w : weights) total += w;
+                    double at = which * total;
+                    for (int k = 0; k < choices.size() && c == null; k++) {
+                        at -= weights.get(k);
+                        if (at < 0) c = choices.get(k);
+                    }
+                    if (c == null) c = choices.getLast();
+                }
+                int[] pcs = c == null ? p : c.pcs();
+                int third = Math.floorMod(pcs[1] - pcs[0], 12);
+                int step = previousBass < 0 ? 0 : Math.min(Math.floorMod(pcs[1] - previousBass, 12),
+                        Math.floorMod(previousBass - pcs[1], 12));
+                if (turned < harmony * 0.5 && (third == 3 || third == 4) && (step == 1 || step == 2)) {
+                    c = new Colour(pcs, pcs[1], Math.floorMod(pcs[0] - pcs[1], 12), false);
+                }
+                out[i] = c;
+                previousBass = c == null ? root : c.bass();
+            }
+            return out;
         }
 
         /** Four chords as steps of the scale (0 is the key's own chord), by a chain of likely next steps. */
@@ -229,7 +378,11 @@ public final class Composer {
 
         /** The pitch classes of the chord on a step of the scale; the root first. */
         int[] chord(int degree) {
-            int n = st.sevenths() ? 4 : 3;
+            return chord(degree, st.sevenths() ? 4 : 3);
+        }
+
+        /** The first {@code n} notes of the chord on a step of the scale, in thirds. */
+        int[] chord(int degree, int n) {
             int[] pcs = new int[n];
             Style.Scale scale = st.chordScale();
             for (int i = 0; i < n; i++) {
@@ -343,7 +496,7 @@ public final class Composer {
         // ---------------------------------------------------------------- bass
 
         int root(int bar) {
-            int root = 36 + chordsPerBar[Math.min(bars - 1, bar)][0];
+            int root = 36 + bassPerBar[Math.min(bars - 1, bar)];
             return root > 45 ? root - 12 : root;
         }
 
@@ -357,7 +510,7 @@ public final class Composer {
                     continue;
                 }
                 int root = root(bar);
-                int fifth = root + 7;
+                int fifth = root + fifthPerBar[bar];
                 int base = bar * Song.STEPS_PER_BAR;
                 double vel = sec.kind() == Kind.OUTRO ? 0.7 : 0.9;
                 switch (st.bassLine()) {
@@ -408,6 +561,14 @@ public final class Composer {
             Random kicks = random(Part.BASS, "bass"); // a laid-back beat's kicks follow the bass line
             Style.Groove groove = st.groove();
             double fills = r.fills() / 100.0;
+            // A busy piece gets one more drum whose hits are spread evenly over the bar, turned by the seed.
+            Random layer = random(Part.DRUMS, "layer");
+            int layerHits = new int[]{3, 5, 7}[layer.nextInt(3)];
+            int layerTurn = layer.nextInt(Song.STEPS_PER_BAR);
+            Drum layerDrum = switch (groove) {
+                case BOOM_BAP, EPIC -> Drum.SHAKER;
+                default -> Drum.TOM;
+            };
             for (int bar = 0; bar < bars; bar++) {
                 Section sec = section(bar);
                 boolean intro = sec.kind() == Kind.INTRO;
@@ -468,13 +629,22 @@ public final class Composer {
                         }
                     }
                     case EPIC -> {
-                        int[] pattern = euclid(5, 16);
+                        int[] pattern = euclid(5, 16, 0);
                         for (int t = 0; t < 16; t++) if (pattern[t] == 1) hit(hits, t, Drum.TOM, t == 0 ? 1 : 0.7);
                         hit(hits, 0, Drum.KICK, 0.9);
                         hit(hits, 12, Drum.SNARE, 0.9);
                         if (e > 0.5) for (int t = 0; t < 16; t += 2) hit(hits, t, Drum.HAT, 0.35);
                     }
                     default -> {
+                    }
+                }
+                if (e > 0.5 && !intro && !outro) {
+                    int[] pattern = euclid(layerHits + (sec.kind() == Kind.B ? 2 : 0), Song.STEPS_PER_BAR, layerTurn);
+                    for (int t = 0; t < Song.STEPS_PER_BAR; t++) {
+                        int step = t;
+                        boolean taken = hits.stream().anyMatch(h -> h[0] == step
+                                && channel(Drum.values()[(int) h[1]]) == channel(layerDrum));
+                        if (pattern[t] == 1 && !taken) hit(hits, t, layerDrum, t % 4 == 0 ? 0.42 : 0.32);
                     }
                 }
                 if (intro && e < 0.5) {
@@ -494,11 +664,7 @@ public final class Composer {
         }
 
         void drum(double step, Drum d, double velocity, Random random) {
-            int channel = switch (d) {
-                case KICK -> Song.KICK;
-                case SNARE, CLAP, TOM -> Song.SNARE;
-                default -> Song.HATS;
-            };
+            int channel = channel(d);
             double v = Math.min(1, velocity * (0.93 + 0.1 * random.nextDouble()));
             notes.add(new Note(step, 1, channel, 60, Math.max(0.05, v), null, d));
         }
@@ -507,11 +673,13 @@ public final class Composer {
             hits.add(new double[]{step, d.ordinal(), velocity});
         }
 
-        /** {@code k} hits spread as evenly as possible over {@code n} steps. */
-        static int[] euclid(int k, int n) {
-            int[] pattern = new int[n];
-            for (int i = 0; i < n; i++) pattern[i] = (i * k) % n < k ? 1 : 0;
-            return pattern;
+        /** The channel a drum is played on: the kick, the drums with a skin, the cymbals and shakers. */
+        static int channel(Drum d) {
+            return switch (d) {
+                case KICK -> Song.KICK;
+                case SNARE, CLAP, TOM -> Song.SNARE;
+                default -> Song.HATS;
+            };
         }
 
         // ---------------------------------------------------------------- melody
@@ -601,8 +769,10 @@ public final class Composer {
         }
 
         /**
-         * The notes of the chord one after another, up, down, up and down or in leaps; sixteenths, or eighths
-         * in slow and sparse pieces. The figure starts anew with every bar and differs between A and B.
+         * The notes of the chord one after another, up, down, up and down or in leaps; on sixteenths, or on
+         * eighths in slow and sparse pieces. The rhythm is Euclidean: the busier the piece, the more of the
+         * steps are played, spread evenly and turned by the seed so that the bar still starts with a note. The
+         * figure starts anew with every bar and differs between A and B.
          */
         void arpeggio() {
             Random random = random(Part.ARPEGGIO, "arpeggio");
@@ -611,6 +781,10 @@ public final class Composer {
             int shapeA = random.nextInt(4);
             int shapeB = (shapeA + 1 + random.nextInt(3)) % 4;
             int span = 5 + random.nextInt(3);
+            int steps = Song.STEPS_PER_BAR / stepLength;
+            int played = Math.max(3, Math.min(steps, (int) Math.round(steps * (0.55 + 0.45 * energy))));
+            int[] rhythmA = startingWithANote(euclid(played, steps, 0), random.nextInt(played));
+            int[] rhythmB = startingWithANote(euclid(played, steps, 0), random.nextInt(played));
             for (int bar = 0; bar < bars; bar++) {
                 Section sec = section(bar);
                 if (sec.kind() == Kind.INTRO && bar < sec.startBar() + sec.bars() / 2) continue;
@@ -618,7 +792,7 @@ public final class Composer {
                 int[] pcs = chordsPerBar[bar];
                 int[] ladder = new int[span];
                 for (int pitch = 60, i = 0; i < span; pitch++) {
-                    for (int c = 0; c < 3; c++) {
+                    for (int c = 0; c < pcs.length; c++) {
                         if (pitch % 12 == pcs[c]) {
                             ladder[i++] = pitch;
                             break;
@@ -626,13 +800,20 @@ public final class Composer {
                     }
                 }
                 int shape = sec.kind() == Kind.B ? shapeB : shapeA;
+                int[] rhythm = sec.kind() == Kind.B ? rhythmB : rhythmA;
                 double vel = edge(sec) ? 0.5 : 0.62;
                 int base = bar * Song.STEPS_PER_BAR;
-                for (int t = 0, i = 0; t < Song.STEPS_PER_BAR; t += stepLength, i++) {
-                    add(base + t, stepLength, Song.ARPEGGIO, ladder[rung(shape, i, span)], vel + (t % 4 == 0 ? 0.15 : 0), in);
+                for (int s = 0, i = 0; s < steps; s++) {
+                    if (rhythm[s] == 0) continue;
+                    int next = s + 1;
+                    while (next < steps && rhythm[next] == 0) next++;
+                    int t = s * stepLength;
+                    add(base + t, Math.min(4, (next - s) * stepLength), Song.ARPEGGIO, ladder[rung(shape, i++, span)],
+                            vel + (t % 4 == 0 ? 0.15 : 0), in);
                 }
             }
         }
+
 
         /** The rung of the ladder for the {@code i}-th note of a figure. */
         static int rung(int shape, int i, int span) {

@@ -21,10 +21,12 @@
 - **The instrument chooser** (the keyboard button of a lane) describes each instrument, shows its waveform and lets you try it on a two-octave keyboard, with the mouse or the computer keys A to L. Attack, release and octave can be set there too, and two movements in time with the piece: a *filter sweep* that closes and opens the sound, and a *tremolo* that lets the volume sink and rise, each over eight bars down to an eighth note.
 - **The recipe** on the right:
   - seed (0 to 999 999 999), key (or the key the seed gives) and length (30 seconds to 5 minutes)
+  - *Harmony* (plain to colourful): how many chords are suspended, get a seventh, sixth or ninth, become a dominant seventh, an augmented or a diminished chord, or have their third in the bass
   - *Beat*: tempo, hardness (dull to hard), swing, energy (sparse to busy), fills, variety (steady to changing)
   - *Sound*: brightness, reverb (dry to hall), vinyl crackle
   - Changing only the sound or a volume mixes the piece again without composing it anew, which is almost immediate.
 - **Parts that rest and come back**: with more *variety*, melody, bass and drums come in later and rest for some bars, while the chords carry on. The drums answer: a roll before they return, a last hit when they stop, a short fill and a crash when another part comes in.
+- **Euclidean rhythms**: a busy piece gets one more drum whose three, five or seven hits are spread evenly over the bar, and the arpeggio leaves out steps the same way when the piece is sparse.
 - **New Piece** (Ctrl+N, the die on the toolbar): new notes for all parts that are not kept; style, sliders and instruments stay. *Random Seed* (Ctrl+R) changes all parts.
 - **Variations** (Ctrl+G): eight relatives of the piece (other melody, chords, bass line or drums; faster, slower, harder, softer). Listen to each, then take one.
 - **History** of the last fifty pieces: *Back* and *Forward* (Alt+Left/Right, Ctrl+Z/Ctrl+Y).

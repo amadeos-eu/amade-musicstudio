@@ -266,6 +266,19 @@ public enum Style {
         };
     }
 
+    /** How many chords are coloured, 0 to 100; see {@link Recipe#harmony()}. */
+    public int defaultHarmony() {
+        return switch (this) {
+            case LOFI -> 60;
+            case AMBIENT -> 50;
+            case ADVENTURE -> 45;
+            case PIANO -> 35;
+            case MEDITATION, ACOUSTIC -> 30;
+            case ELECTRO -> 25;
+            case CHIPTUNE -> 10;
+        };
+    }
+
     public int defaultCrackle() {
         return crackle;
     }
